@@ -8,7 +8,9 @@ on:
     paths:
       - "src/**"
       - "benchmarks/measure_recall.py"
+      - "sripts/**"
       - "pyproject.toml"
+      - ".github/workflows/benchmark.yml"
   workflow_dispatch:
     inputs:
       full:
