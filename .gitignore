@@ -10,6 +10,9 @@ data/outputs/
 # 보고서 (재생성 가능)
 reports/
 
+# MLflow
+mlruns/
+
 # Python
 __pycache__/
 *.pyc

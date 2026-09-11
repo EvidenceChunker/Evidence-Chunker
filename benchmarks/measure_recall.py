@@ -28,6 +28,7 @@ from __future__ import annotations
 import argparse
 import gc
 import json
+import os
 import re
 from collections import Counter, defaultdict
 from pathlib import Path
@@ -385,15 +386,35 @@ def _ci(n):
 
 
 def run(pdf_dir: Path, qa_dir: Path, out_dir: Path, dev_only: bool, max_pdfs: int | None,
-        parity_check: bool = False) -> None:
+        parity_check: bool = False, use_mlflow: bool = False) -> None:
     from sentence_transformers import SentenceTransformer
     import torch
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
+    tag = "dev20" if dev_only else "full90"
+
+    if use_mlflow:
+        import mlflow
+        if not os.environ.get("MLFLOW_TRACKING_URI"):
+            mlflow_db = (Path.cwd() / "mlflow.db").resolve()
+            mlflow.set_tracking_uri(f"sqlite:///{mlflow_db.as_posix()}")
+        mlflow.set_experiment("evidence-chunker-benchmark")
+        mlflow.start_run(run_name=tag)
+        mlflow.log_params({
+            "tag": tag,
+            "bbox_threshold": BBOX_THRESHOLD,
+            "sim_threshold": SIM_THRESHOLD,
+            "embed_model": EMBED_MODEL_NAME,
+            "encode_batch": ENCODE_BATCH,
+            "min_doc_n": MIN_DOC_N,
+            "max_pdfs": max_pdfs,
+        })
 
     pairs = pdf_qa_pairs(pdf_dir, qa_dir, dev_only, max_pdfs)
     if not pairs:
         print("[ERR] PDF-QA 쌍 없음")
+        if use_mlflow:
+            mlflow.end_run(status="FAILED")
         return
 
     import evidence_chunker
@@ -413,6 +434,8 @@ def run(pdf_dir: Path, qa_dir: Path, out_dir: Path, dev_only: bool, max_pdfs: in
 
     if not rows:
         print("[ERR] 결과 없음")
+        if use_mlflow:
+            mlflow.end_run(status="FAILED")
         return
 
     N = len(rows)
@@ -521,7 +544,6 @@ def run(pdf_dir: Path, qa_dir: Path, out_dir: Path, dev_only: bool, max_pdfs: in
                 "eu_em": round(_rate(rs, "e_em"), 4),
                 "ci_halfwidth_pp": round(_ci(len(rs)), 2)}
 
-    tag = "dev20" if dev_only else "full90"
     summary = {
         "config": {"scope": tag, "qa_dir": str(qa_dir), "embed_model": EMBED_MODEL_NAME,
                    "bbox_threshold": BBOX_THRESHOLD, "sim_threshold": SIM_THRESHOLD,
@@ -564,6 +586,17 @@ def run(pdf_dir: Path, qa_dir: Path, out_dir: Path, dev_only: bool, max_pdfs: in
         json.dumps(rows, indent=2, ensure_ascii=False), encoding="utf-8")
     print(f"\n저장: bench_{tag}.json  /  bench_{tag}_rows.json ({len(rows)} rows)")
 
+    if use_mlflow:
+        mlflow.log_metrics(summary["macro_average"])
+        if summary.get("macro_average_min_n"):
+            mlflow.log_metrics({
+                f"minN_{k}": v for k, v in summary["macro_average_min_n"].items()
+                if isinstance(v, (int, float))
+            })
+        mlflow.log_artifact(str(out_dir / f"bench_{tag}.json"))
+        mlflow.log_artifact(str(out_dir / f"bench_{tag}_rows.json"))
+        mlflow.end_run()
+
 
 # ===========================================================================
 # 6. CLI
@@ -579,12 +612,32 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--max-pdfs", type=int, default=None, help="추가 상한 (디버깅용)")
     p.add_argument("--parity-check", action="store_true",
                     help="첫 문서에서 EvidenceChunker.build_corpus() 결과와 대조")
+    p.add_argument("--mlflow", action="store_true")
+    # 스윕 자동화
+    p.add_argument("--bbox-threshold", type=float, default=None, help="BBOX_THRESHOLD")
+    p.add_argument("--sim-threshold", type=float, default=None, help="SIM_THRESHOLD")
+    p.add_argument("--embed-model", type=str, default=None, help="EMBED_MODEL_NAME")
+    p.add_argument("--encode-batch", type=int, default=None, help="ENCODE_BATCH")
     return p.parse_args()
 
 
 def main() -> None:
+    global BBOX_THRESHOLD, SIM_THRESHOLD, EMBED_MODEL_NAME, ENCODE_BATCH, CTX_WINDOW_PT
+
     args = parse_args()
-    run(args.pdf_dir, args.qa_dir, args.out_dir, args.dev_only, args.max_pdfs, args.parity_check)
+
+    if args.bbox_threshold is not None:
+        BBOX_THRESHOLD = args.bbox_threshold
+        CTX_WINDOW_PT = args.bbox_threshold  # 두 값은 항상 같이 움직임
+    if args.sim_threshold is not None:
+        SIM_THRESHOLD = args.sim_threshold
+    if args.embed_model is not None:
+        EMBED_MODEL_NAME = args.embed_model
+    if args.encode_batch is not None:
+        ENCODE_BATCH = args.encode_batch
+
+    run(args.pdf_dir, args.qa_dir, args.out_dir, args.dev_only, args.max_pdfs, args.parity_check,
+        args.mlflow)
 
 
 if __name__ == "__main__":

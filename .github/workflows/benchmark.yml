@@ -1,0 +1,73 @@
+name: Benchmark
+
+# push할 때는 빠른 dev-only(20개 문서)로 자동 실행
+
+on:
+  push:
+    branches: ["**"]
+    paths:
+      - "src/**"
+      - "benchmarks/measure_recall.py"
+      - "pyproject.toml"
+  workflow_dispatch:
+    inputs:
+      full:
+        description: "전체 90개 문서로 실행"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: pyproject.toml
+
+      - name: 패키지 설치 (evidence-chunker + dev/tracking extras + kaggle CLI)
+        run: |
+          pip install -e ".[dev,tracking]"
+          pip install kaggle
+
+      - name: Kaggle에서 벤치마크 PDF/QA 데이터셋 설치
+        env:
+          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+          KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
+        run: |
+          kaggle datasets download -d wonhalam/evidence-chunker-bench -p ./data --unzip
+
+      - name: 데이터 경로 확인
+        run: |
+          echo "pdfs: $(ls data/pdfs | wc -l)개"
+          echo "auto_qa: $(ls data/auto_qa | wc -l)개"
+
+      - name: 벤치마크 실행 + MLflow(DagsHub)로 기록
+        env:
+          MLFLOW_TRACKING_URI: ${{ secrets.MLFLOW_TRACKING_URI }}
+          MLFLOW_TRACKING_USERNAME: ${{ secrets.MLFLOW_TRACKING_USERNAME }}
+          MLFLOW_TRACKING_PASSWORD: ${{ secrets.MLFLOW_TRACKING_PASSWORD }}
+          PYTHONUTF8: "1"
+          TORCHDYNAMO_DISABLE: "1"
+        run: |
+          ARGS="--pdf-dir ./data/pdfs --qa-dir ./data/auto_qa --out-dir ./results --mlflow"
+          if [ "${{ github.event.inputs.full }}" != "true" ]; then
+            ARGS="$ARGS --dev-only"
+          fi
+          python benchmarks/measure_recall.py $ARGS
+
+      - name: 결과 JSON을 Actions 아티팩트로 보관
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results-${{ github.run_number }}
+          path: results/
+          retention-days: 30
