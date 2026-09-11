@@ -33,17 +33,16 @@ jobs:
           cache: "pip"
           cache-dependency-path: pyproject.toml
 
-      - name: 패키지 설치 (evidence-chunker + dev/tracking extras + kaggle CLI)
+      - name: 패키지 설치 (evidence-chunker + dev/tracking extras)
         run: |
           pip install -e ".[dev,tracking]"
-          pip install kaggle
 
-      - name: Kaggle에서 벤치마크 PDF/QA 데이터셋 설치
+      - name: DagsHub Storage에서 벤치마크 PDF/QA 받기 (private 버킷, 토큰 인증)
         env:
-          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
-          KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
+          DAGSHUB_TOKEN: ${{ secrets.MLFLOW_TRACKING_PASSWORD }}
         run: |
-          kaggle datasets download -d wonhalam/evidence-chunker-bench -p ./data --unzip
+          pip install dagshub boto3
+          python scripts/download_bench_data.py --out-dir ./data
 
       - name: 데이터 경로 확인
         run: |
