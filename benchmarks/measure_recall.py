@@ -18,6 +18,9 @@ context_keys=문단에만) 때문에 EU만 구조적으로 통과 가능하다.
 주의: normalize_for_em/has_token/em_hit은 benchmarks/generate_qa_docling.py의
 동일 함수와 반드시 같은 규칙을 유지해야 한다 — 어긋나면 answer_spec이 의미를 잃는다.
 
+통계: _ci()는 참고용 단순 근사치. 유의성 판단은 paired_statistics()의 문서 단위
+클러스터 부트스트랩 CI(주 지표) + McNemar 검정(보조 지표, 질문 간 독립 가정)을 쓴다.
+
 사용법:
     python measure_recall.py --pdf-dir ./data/pdfs --qa-dir ./auto_qa --out-dir ./results
     python measure_recall.py --pdf-dir ./data/pdfs --qa-dir ./auto_qa --out-dir ./results --dev-only
@@ -28,10 +31,13 @@ from __future__ import annotations
 import argparse
 import gc
 import json
+import math
 import os
 import re
 from collections import Counter, defaultdict
 from pathlib import Path
+
+import numpy as np
 
 # ---------------------------------------------------------------------------
 # 하이퍼파라미터 — 라이브러리 기본값과 동일하게 유지 (sweep은 별도 실험)
@@ -381,8 +387,70 @@ def _line(label, rows, width=28):
 
 
 def _ci(n):
-    """95% CI 반폭(pp) — 표본이 작을 때 관측된 갭이 실제로 유의한지 판단하는 기준."""
+    """95% CI 반폭(pp) — 표본이 작을 때 관측된 갭이 실제로 유의한지 판단하는 기준.
+
+    단순 이항분포 최대분산(p=0.5) 근사(Wald)라, 같은 질문에 대한
+    baseline/EU 쌍대비교 구조나 문서 내 상관은 반영하지 않는다. 엄밀한
+    유의성 판단에는 아래 paired_statistics()를 쓸 것 — 이 함수는 빠른
+    참고용 오차범위로만 남겨둔다.
+    """
     return 1.96 * 0.5 / (n ** 0.5) * 100 if n else float("inf")
+
+
+def paired_statistics(doc_ids, baseline, treatment, repeats: int = 50000, seed: int = 20260915) -> dict:
+    """문서 단위 클러스터 부트스트랩 CI + 보조 McNemar 검정.
+
+    _ci()와 달리 같은 문서에서 나온 질문들을 묶어서(문서를 리샘플링 단위로
+    삼아) 차이의 95% percentile CI를 구한다 — 문서 내 질문 간 상관을
+    반영하는 방식. McNemar는 "baseline만 맞음 vs EU만 맞음"의 비대칭을
+    검정하는 보조 지표로 덧붙이되, 문서 간 의존성은 보정하지 않는다는
+    가정을 명시한다.
+
+    baseline/treatment: 질문별 0/1(또는 bool) 정오답 배열. doc_ids와 길이가
+    같아야 하며, 같은 인덱스가 같은 질문을 가리켜야 한다(쌍대비교 전제).
+    """
+    b = np.asarray(list(baseline), dtype=np.int64)
+    e = np.asarray(list(treatment), dtype=np.int64)
+    doc_ids = list(doc_ids)
+    if len(doc_ids) != len(b) or len(b) != len(e) or not len(b):
+        raise ValueError("Paired vectors must be nonempty and equal length.")
+
+    grouped: dict = defaultdict(lambda: [0, 0])  # doc_id -> [n_questions, sum(e-b)]
+    for d, delta in zip(doc_ids, e - b):
+        grouped[d][0] += 1
+        grouped[d][1] += int(delta)
+    a = np.asarray([grouped[d] for d in sorted(grouped)], dtype=np.int64)
+
+    ci = None
+    if len(a) >= 2:
+        rng, values = np.random.default_rng(seed), []
+        for start in range(0, repeats, 2048):
+            idx = rng.integers(0, len(a), size=(min(2048, repeats - start), len(a)))
+            total = a[idx].sum(axis=1)
+            values.append(100 * total[:, 1] / total[:, 0])
+        ci = np.quantile(np.concatenate(values), [.025, .975]).tolist()
+
+    b_only = int(((b == 1) & (e == 0)).sum())
+    e_only = int(((b == 0) & (e == 1)).sum())
+    discordant = b_only + e_only
+    chi2 = max(abs(b_only - e_only) - 1, 0) ** 2 / discordant if discordant else 0.0
+    p = math.erfc(math.sqrt(chi2 / 2)) if discordant else 1.0
+
+    return {
+        "n_questions": len(b), "n_documents": len(a),
+        "baseline": float(b.mean()), "treatment": float(e.mean()),
+        "difference_pp": float(100 * (e - b).mean()),
+        "cluster_bootstrap_ci95_pp": ci,
+        "bootstrap": {"unit": "document", "statistic": "micro_rate_difference",
+                      "method": "percentile", "repeats": repeats, "seed": seed},
+        "mcnemar_supplementary": {
+            "method": "chi_square_continuity_corrected", "chi2": chi2, "p_value": p,
+            "baseline_only": b_only, "treatment_only": e_only,
+            "assumption": "질문 간 독립 가정 — 문서 내 의존성은 보정하지 않음(보조 지표)",
+        },
+        "ci_note": ("문서를 독립 표집 단위로 취급한 근사치이며, LLM 생성 답변 정확도의 CI가 아님"
+                    if ci is not None else "문서 2개 미만이라 CI 계산 불가"),
+    }
 
 
 def run(pdf_dir: Path, qa_dir: Path, out_dir: Path, dev_only: bool, max_pdfs: int | None,
@@ -504,6 +572,17 @@ def run(pdf_dir: Path, qa_dir: Path, out_dir: Path, dev_only: bool, max_pdfs: in
     print(f"\n  [real_driver] both_right={rd['both_right']}  "
           f"baseline_win_eu_lose={rd['baseline_win_eu_lose']}  "
           f"eu_win_baseline_lose={rd['eu_win_baseline_lose']}  both_wrong={rd['both_wrong']}")
+
+    paired_em = paired_statistics([r["doc_id"] for r in rows],
+                                   [r["b_em"] for r in rows], [r["e_em"] for r in rows])
+    ci = paired_em["cluster_bootstrap_ci95_pp"]
+    ci_str = f"[{ci[0]:+.1f}, {ci[1]:+.1f}]pp" if ci else "N/A(문서<2)"
+    mc = paired_em["mcnemar_supplementary"]
+    print(f"\n  [EM 통계 검정] 문서 단위 부트스트랩 차이 {paired_em['difference_pp']:+.1f}pp  "
+          f"95% CI {ci_str}")
+    print(f"  [McNemar 보조] baseline만 정답 {mc['baseline_only']}  EU만 정답 {mc['treatment_only']}  "
+          f"chi2={mc['chi2']:.2f}  p={mc['p_value']:.2e}")
+
     fails = Counter(r["fail_reason"] for r in rows if r["fail_reason"])
     if fails:
         print(f"\n  EU 실패 사유 상위")
@@ -573,6 +652,7 @@ def run(pdf_dir: Path, qa_dir: Path, out_dir: Path, dev_only: bool, max_pdfs: in
                                  "eu_em": round(mbig["e_em"], 4)} if mbig else None),
         "doc_question_counts": {d: len(v) for d, v in by_doc.items()},
         "real_driver": dict(rd),
+        "paired_statistics_em": paired_em,
         "fail_reasons": dict(fails),
         "pipeline": {"n_eu": sum(r["n_eu"] for r in results), "n_split": ts,
                      "dedup_removed": tc, "hybrid_before_dedup": tb,
@@ -591,6 +671,15 @@ def run(pdf_dir: Path, qa_dir: Path, out_dir: Path, dev_only: bool, max_pdfs: in
         if summary.get("macro_average_min_n"):
             mlflow.log_metrics({
                 f"minN_{k}": v for k, v in summary["macro_average_min_n"].items()
+                if isinstance(v, (int, float))
+            })
+        # QA 유형별(cell_value / table_about / context_dependent) 지표도
+        # DagsHub에서 바로 비교할 수 있게 별도 metric으로 남긴다.
+        for t, blk_v in summary.get("by_type", {}).items():
+            if not blk_v:
+                continue
+            mlflow.log_metrics({
+                f"type_{t}_{k}": v for k, v in blk_v.items()
                 if isinstance(v, (int, float))
             })
         mlflow.log_artifact(str(out_dir / f"bench_{tag}.json"))
