@@ -1,14 +1,16 @@
 name: Benchmark
 
-# push할 때는 빠른 dev-only(20개 문서)로 자동 실행
+# 3단계로 나눠서 돈다 (CPU 러너라 무거운 걸 매번 돌리면 너무 오래 걸림):
+#   - main이 아닌 브랜치에 push        -> smoke (5개 문서, 몇 분)  : 코드가 안 깨졌는지만 빠르게 확인
+#   - main에 push                     -> dev-only (20개 문서, ~1시간) : 회귀 체크
+#   - workflow_dispatch (full: true)  -> 전체 90개 문서 (수동 트리거 전용, 여러 시간 소요)
 
 on:
   push:
-    branches: ["**"]
     paths:
       - "src/**"
       - "benchmarks/measure_recall.py"
-      - "sripts/**"
+      - "scripts/**"
       - "pyproject.toml"
       - ".github/workflows/benchmark.yml"
   workflow_dispatch:
@@ -51,6 +53,20 @@ jobs:
           echo "pdfs: $(ls data/pdfs | wc -l)개"
           echo "auto_qa: $(ls data/auto_qa | wc -l)개"
 
+      - name: 실행 범위 결정 (smoke / dev / full)
+        id: scope
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ github.event.inputs.full }}" = "true" ]; then
+            echo "args=--mlflow" >> "$GITHUB_OUTPUT"
+            echo "label=full (90개)" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            echo "args=--mlflow --dev-only" >> "$GITHUB_OUTPUT"
+            echo "label=dev-only (20개)" >> "$GITHUB_OUTPUT"
+          else
+            echo "args=--mlflow --dev-only --max-pdfs 5" >> "$GITHUB_OUTPUT"
+            echo "label=smoke (5개)" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: 벤치마크 실행 + MLflow(DagsHub)로 기록
         env:
           MLFLOW_TRACKING_URI: ${{ secrets.MLFLOW_TRACKING_URI }}
@@ -59,11 +75,15 @@ jobs:
           PYTHONUTF8: "1"
           TORCHDYNAMO_DISABLE: "1"
         run: |
-          ARGS="--pdf-dir ./data/pdfs --qa-dir ./data/auto_qa --out-dir ./results --mlflow"
-          if [ "${{ github.event.inputs.full }}" != "true" ]; then
-            ARGS="$ARGS --dev-only"
-          fi
-          python benchmarks/measure_recall.py $ARGS
+          echo "실행 범위: ${{ steps.scope.outputs.label }}"
+          python benchmarks/measure_recall.py \
+            --pdf-dir ./data/pdfs --qa-dir ./data/auto_qa --out-dir ./results \
+            ${{ steps.scope.outputs.args }}
+
+      - name: 결과 요약을 Actions 탭에 바로 표시
+        if: always()
+        run: |
+          python scripts/summarize_results.py --results-dir ./results --label "${{ steps.scope.outputs.label }}"
 
       - name: 결과 JSON을 Actions 아티팩트로 보관
         if: always()
