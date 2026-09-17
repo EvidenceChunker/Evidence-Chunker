@@ -127,6 +127,7 @@ def build_evidence_units(
             eu_id=eu_id,
             page_no=pg,
             doc_id=doc_id,
+            table_index=table_index,
             caption_text=caption_text,
             table_html=table_html,
             footnote_text=footnote_text,

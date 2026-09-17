@@ -41,6 +41,12 @@ class EvidenceUnit:
     page_no: int
     doc_id: str = ""    # eu_id 접두사. 여러 PDF를 합칠 때 충돌 방지용
 
+    # parsed.tables 안에서의 전역 위치(parser.base.TableBlock.index와 동일
+    # 값). QA 생성기가 정답 표를 meta.table_index로 태깅해두므로, 이 값을
+    # 그대로 보존해야 "정답 표 자체를 검색했는가"를 리트리벌 단계에서
+    # 판별할 수 있다(페이지 일치만으로는 같은 페이지의 다른 표와 구분 불가).
+    table_index: Optional[int] = None
+
     # 표와 연결된 모든 페이지. context가 인접 페이지에서 가져온 경우 포함.
     page_span: set[int] = field(default_factory=set)
 
@@ -201,6 +207,7 @@ class EvidenceUnit:
             "doc_id": self.doc_id,
             "page_no": self.page_no,
             "page_span": sorted(self.page_span) if self.page_span else [self.page_no],
+            "table_index": self.table_index,
             "section_header": self.section_header,
             "caption_text": self.caption_text,
             "bbox": list(self.bbox),
