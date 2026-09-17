@@ -4,7 +4,7 @@
 
 **표가 포함된 PDF에서 RAG가 정답을 놓치지 않도록**
 
-Docling으로 파싱한 PDF의 표·캡션·설명 단락을 하나의 검색 단위(Evidence Unit)로 묶어 RAG 정답률을 높이는 파이썬 라이브러리
+Docling이 파싱한 PDF의 표·캡션·설명 단락을 하나의 검색 단위(Evidence Unit)로 구성해 RAG 검색 성능을 높이는 Python 라이브러리
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)](pyproject.toml)
@@ -29,41 +29,47 @@ Docling으로 파싱한 PDF의 표·캡션·설명 단락을 하나의 검색 �
 
 ## 문제 정의
 
-RAG 파이프라인에서 표가 포함된 PDF는 정답률이 유독 낮다. 원인은 파싱이 아니라 청킹이다.
+RAG 파이프라인에서 표가 포함된 PDF는 정답률이 유독 낮다. 많은 경우 원인은 파싱 자체보다 검색 단위(chunking) 구성 방식에 있다.
 
-> **표+설명 문단이 결합돼야만 풀리는 질문 536개 중, Docling HybridChunker 단독으로 정답을 맞춘 건 단 5개(EM 0.9%)였다.**
+즉, 문제는 PDF parsing 이후 retrieval을 위해 문서 요소를 어떻게 재구성하느냐에 있다.
 
-Docling은 표와 캡션을 정확히 인식하고 연결까지 하지만(`table.captions`), 청킹 단계에서 이 연결이 다시 끊어진다.
+Docling은 표 구조와 캡션 정보를 보존하고 메타데이터로 연결해준다(`table.captions`, `HybridChunker`의 `merge_peers`/`repeat_table_header`). 문제는 HybridChunker의 merge 규칙이 동일한 heading/caption 정보를 공유하는 요소 중심으로 동작한다는 점이다. 
+
+표를 해석하는 데 필요한 본문 설명 문단은 그 표의 caption을 공유하지 않으므로 병합 대상에서 빠지고, 표와 별도 청크로 남는다.
 
 ```mermaid
 flowchart LR
     subgraph HC["Docling HybridChunker"]
         direction TB
-        C1["캡션<br/>'Table 3: 지역별 매출'"]
-        C2["표 데이터<br/>지역 · Q1 · Q2 ..."]
-        C3["각주<br/>'(단위: 백만 달러)'"]
-        C4["설명 단락<br/>'서울은 신규 지점 2곳 개점 영향으로...'"]
+        C1["표 데이터
++ caption metadata"]
+        C2["설명 단락 · 각주<br/>'서울은 신규 지점 2곳 개점 영향으로...'<br/>(caption을 공유하지 않아 병합 안 됨)"]
     end
-    EU["Evidence Chunker<br/>캡션 + 표 데이터 + 각주 + 설명<br/><b>하나의 검색 단위로 통합</b>"]
+    EU["Evidence Chunker<br/>표 + 캡션 + 각주 + 설명 단락<br/><b>하나의 검색 단위로 통합</b>"]
 
     C1 -.-> EU
     C2 -.-> EU
-    C3 -.-> EU
-    C4 -.-> EU
 
     style HC fill:transparent,stroke:transparent,stroke-width:1.5px,color:#2E3440
     style C1 fill:#ECEFF4,stroke:#D08770,stroke-width:1px,color:#2E3440
     style C2 fill:#ECEFF4,stroke:#D08770,stroke-width:1px,color:#2E3440
-    style C3 fill:#ECEFF4,stroke:#D08770,stroke-width:1px,color:#2E3440
-    style C4 fill:#ECEFF4,stroke:#D08770,stroke-width:1px,color:#2E3440
     style EU fill:#88C0D0,stroke:#5E81AC,stroke-width:2.5px,color:#2E3440
 ```
 
-Docling HybridChunker는, 표 숫자와 설명 단락이 함께 있어야 풀리는 질문이 들어오면, 캡션·표·설명이 서로 다른 청크에 흩어져 있어 하나의 청크만으로는 답을 구성할 수 없다는 구조적 문제가 있다.
+그 결과, 표 숫자와 설명 단락이 함께 있어야 풀리는 질문이 들어오면 하나의 청크만으로는 답을 구성할 수 없다.
 
-이에, **Evidence Chunker는 같은 표의 캡션+숫자+각주+설명을 한 청크(EU)로 묶어 반환한다.** Docling의 강력한 기능(파싱, 레이아웃 분석, 캡션-표 연결)은 사용하되, Docling만으로는 해결되지 않는 문제(청킹 단계에서 캡션·표·문맥이 다시 갈라지는 문제)를 해결한다.
+이에, **Evidence Chunker는 같은 표의 캡션+숫자+각주+설명 문단을 한 청크(EU)로 묶어 반환한다.** Docling의 강력한 기능(파싱, 레이아웃 분석, 캡션-표 연결)은 그대로 사용하되, Docling이 다루지 않는 계층(설명 문단을 표와 같은 검색 단위로 묶는 것)을 그 위에 추가한다.
 
-Evidence Chunker는 같은 536문항에서 baseline 대비 정답을 188개까지 끌어올린다(EM 35.1%, +34.2pp). 자세한 유형별·대조군 수치는 [Benchmark](https://github.com/EvidenceChunker/Evidence-Chunker/wiki/Benchmark) 참고.
+### Evidence Unit (EU)
+
+현재 구현에서는 표를 중심으로 다음 요소를 하나의 Evidence Unit으로 구성한다.
+
+- 표 데이터(table)
+- 캡션(caption)
+- 각주(footnote)
+- 표 주변의 인접 설명 단락(context paragraphs)
+
+Evidence Chunker는 이 평가셋(`context_dependent`, 536문항)에서 baseline 대비 정답을 188개까지 끌어올린다(EM 35.1%, +34.2pp). 자세한 유형별·대조군 수치는 [Benchmark](https://github.com/EvidenceChunker/Evidence-Chunker/wiki/Benchmark) 참고.
 
 ---
 
@@ -71,7 +77,7 @@ Evidence Chunker는 같은 536문항에서 baseline 대비 정답을 188개까�
 
 > "Evidence Unit"이라는 용어와 "파싱 요소를 개별 청크가 아닌 의미적으로 완결된 단위로 묶는다"는 상위 아이디어는 [Han (2026), *Evidence Units: Ontology-Grounded Document Organization for Parser-Independent Retrieval*](https://arxiv.org/abs/2604.00500)에서 가져왔다. 논문의 파이프라인 전체를 구현한 것이 아니라, 그 상위 개념을 Docling 한 파서에 한정하고 간단하게 재구성하였다.
   
-Docling의 `DoclingDocument`를 입력받아, 이미 연결된 `captions` 참조와 `prov[0].bbox`를 활용해 표 하나당 Evidence Unit 하나를 구성한다.
+Docling의 `DoclingDocument`를 입력받아, 이미 연결된 `captions` 참조와 `prov[0].bbox`를 활용해 표를 중심으로 Evidence Unit을 구성한다.
 
 1. **캡션↔표 연결**: `captions` 참조 우선, 실패하면 bbox 거리 → 인접 페이지 → 병합 헤더 순으로 fallback
 2. **인접 설명 단락 부착**: bbox 거리 기준으로 표 위/아래 단락을 EU에 포함
@@ -83,7 +89,7 @@ Docling의 `DoclingDocument`를 입력받아, 이미 연결된 `captions` 참조
 
 | 기능 | 설명 |
 | --- | --- |
-| 캡션↔표 자동 연결 | 4단계 fallback(direct → bbox → 인접 페이지 → 병합 헤더)으로 캡션 없는 표까지 최대한 복구 |
+| 캡션↔표 자동 연결 | 4단계 fallback(direct → bbox → 인접 페이지 → 병합 헤더)으로, 캡션 정보가 부족한 표까지 연결 시도 |
 | 인접 문맥 자동 부착 | bbox 거리 기반으로 표 위/아래 설명 단락을 탐지해 EU에 포함 |
 | 큰 표 자동 분할 | 512토큰 초과 시 헤더+캡션을 반복 삽입하며 행 단위 분할, 모든 조각에 문맥 정보 동일 전파 |
 | LangChain / LlamaIndex 래퍼 | `to_langchain()`, `to_langchain_units()`(small-to-big), `EvidenceRetriever`(max-pool dedupe 내장) |
@@ -117,6 +123,16 @@ flowchart LR
 
 ---
 
+## 지원 범위
+
+현재 지원:
+
+- PDF (Docling parser 기반)
+
+입력은 Docling이 파싱 가능한 PDF. 표 구조 인식은 Docling의 `do_table_structure`에 의존하므로, OCR 품질이 낮거나 표 구조가 복잡한 PDF는 상위 파이프라인(Docling)의 한계를 그대로 이어받는다.
+
+---
+
 ## 설치
 
 ```bash
@@ -141,7 +157,10 @@ pip install -e ".[langchain]"
 from evidence_chunker import EvidenceChunker
 
 chunker = EvidenceChunker()
-eus = chunker.chunk("paper.pdf")  # List[EvidenceUnit] (표만)
+eus = chunker.chunk("paper.pdf")
+# List[EvidenceUnit]
+# 각 EU는 표 + 캡션 + 각주 + 인접 문맥을 포함하는 검색 단위
+# 일반 본문까지 포함한 전체 코퍼스는 build_corpus() 사용
 
 for eu in eus:
     print(eu.caption_text, "->", len(eu.text), "chars")
@@ -183,7 +202,7 @@ chunks = chunker.build_corpus("paper.pdf")  # EU(표) + TextChunk(일반 본문)
 | Recall | 0.574 | 0.625 | +5.1pp |
 | EM | 0.314 | 0.569 | +25.5pp (95% CI ±1.88pp) |
 
-`context_dependent`(표+설명 문단이 결합돼야만 풀리는 질문 유형, 이 프로젝트가 해결하려는 핵심 케이스)는 baseline이 사실상 전혀 풀지 못하지만(EM 0.009) Evidence Chunker는 0.351까지 향상(+34.1pp).
+`context_dependent`(표+설명 문단이 결합돼야만 풀리는 질문 유형)는 baseline에서 매우 낮은 성능(EM 0.009)을 보였으나, 동일 평가 조건에서 Evidence Chunker는 EM 0.351까지 향상했다(+34.1pp).
 
 유형별 성능 및 대조군(청크 크기 확대·행분할·semantic chunker) 비교 등은 [Benchmark](https://github.com/EvidenceChunker/Evidence-Chunker/wiki/Benchmark), 파라미터 스윕(bbox/sim_threshold) 등 전체 실험 과정은 [Experiments](https://github.com/EvidenceChunker/Evidence-Chunker/wiki/Experiments) 참고.
 
@@ -234,3 +253,4 @@ Apache License 2.0.
 | [Experiments](https://github.com/EvidenceChunker/Evidence-Chunker/wiki/Experiments) | 최종 결과에 이르기까지의 전체 실험 로그 |
 | [QA Generation](https://github.com/EvidenceChunker/Evidence-Chunker/wiki/QA-Generation) | QA 자동생성기 설계 |
 | [Examples](https://github.com/EvidenceChunker/Evidence-Chunker/wiki/Examples) | README보다 더 긴 실전 예제, 커스텀 설정·엣지케이스 처리 |
+
