@@ -10,6 +10,7 @@ on:
     paths:
       - "src/**"
       - "benchmarks/measure_recall.py"
+      - "benchmarks/benchmark.py"
       - "scripts/**"
       - "pyproject.toml"
       - ".github/workflows/benchmark.yml"
