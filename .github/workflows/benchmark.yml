@@ -1,0 +1,94 @@
+name: Benchmark
+
+# 3단계로 나눠서 돈다 (CPU 러너라 무거운 걸 매번 돌리면 너무 오래 걸림):
+#   - main이 아닌 브랜치에 push        -> smoke (5개 문서, 몇 분)  : 코드가 안 깨졌는지만 빠르게 확인
+#   - main에 push                     -> dev-only (20개 문서, ~1시간) : 회귀 체크
+#   - workflow_dispatch (full: true)  -> 전체 90개 문서 (수동 트리거 전용, 여러 시간 소요)
+
+on:
+  push:
+    paths:
+      - "src/**"
+      - "benchmarks/measure_recall.py"
+      - "scripts/**"
+      - "pyproject.toml"
+      - ".github/workflows/benchmark.yml"
+  workflow_dispatch:
+    inputs:
+      full:
+        description: "전체 90개 문서로 실행"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: pyproject.toml
+
+      - name: 패키지 설치 (evidence-chunker + dev/tracking extras)
+        run: |
+          pip install -e ".[dev,tracking]"
+
+      - name: DagsHub Storage에서 벤치마크 PDF/QA 받기 (private 버킷, 토큰 인증)
+        env:
+          DAGSHUB_TOKEN: ${{ secrets.MLFLOW_TRACKING_PASSWORD }}
+        run: |
+          pip install dagshub boto3
+          python scripts/download_bench_data.py --out-dir ./data
+
+      - name: 데이터 경로 확인
+        run: |
+          echo "pdfs: $(ls data/pdfs | wc -l)개"
+          echo "auto_qa: $(ls data/auto_qa | wc -l)개"
+
+      - name: 실행 범위 결정 (smoke / dev / full)
+        id: scope
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ github.event.inputs.full }}" = "true" ]; then
+            echo "args=--mlflow" >> "$GITHUB_OUTPUT"
+            echo "label=full (90개)" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            echo "args=--mlflow --dev-only" >> "$GITHUB_OUTPUT"
+            echo "label=dev-only (20개)" >> "$GITHUB_OUTPUT"
+          else
+            echo "args=--mlflow --dev-only --max-pdfs 5" >> "$GITHUB_OUTPUT"
+            echo "label=smoke (5개)" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: 벤치마크 실행 + MLflow(DagsHub)로 기록
+        env:
+          MLFLOW_TRACKING_URI: ${{ secrets.MLFLOW_TRACKING_URI }}
+          MLFLOW_TRACKING_USERNAME: ${{ secrets.MLFLOW_TRACKING_USERNAME }}
+          MLFLOW_TRACKING_PASSWORD: ${{ secrets.MLFLOW_TRACKING_PASSWORD }}
+          PYTHONUTF8: "1"
+          TORCHDYNAMO_DISABLE: "1"
+        run: |
+          echo "실행 범위: ${{ steps.scope.outputs.label }}"
+          python benchmarks/measure_recall.py \
+            --pdf-dir ./data/pdfs --qa-dir ./data/auto_qa --out-dir ./results \
+            ${{ steps.scope.outputs.args }}
+
+      - name: 결과 요약을 Actions 탭에 바로 표시
+        if: always()
+        run: |
+          python scripts/summarize_results.py --results-dir ./results --label "${{ steps.scope.outputs.label }}"
+
+      - name: 결과 JSON을 Actions 아티팩트로 보관
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results-${{ github.run_number }}
+          path: results/
+          retention-days: 30

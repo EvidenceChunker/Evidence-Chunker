@@ -1,4 +1,4 @@
-# 모델 파일 (용량 큼 — 로컬 다운로드)
+# 모델 파일
 models/
 
 # 테스트 PDF
@@ -9,6 +9,9 @@ data/outputs/
 
 # 보고서 (재생성 가능)
 reports/
+
+# MLflow
+mlruns/
 
 # Python
 __pycache__/

@@ -24,6 +24,7 @@ similarity = ["sentence-transformers>=2.2"]
 langchain = ["langchain-core"]
 llamaindex = ["llama-index-core"]
 dev = ["pytest>=8", "sentence-transformers>=2.2", "llama-index-core"]
+tracking = ["mlflow>=2.14"]
 
 [project.urls]
 Repository = "https://github.com/EvidenceChunker/Evidence-Chunker"
