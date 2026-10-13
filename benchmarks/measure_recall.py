@@ -1,3 +1,5 @@
+# Copyright 2026 docling-evidence-chunker contributors
+# SPDX-License-Identifier: Apache-2.0
 """
 measure_recall.py — CI 벤치마크 러너. 평가 로직의 단일 소스는 benchmark.py이며,
 이 파일은 benchmark.run()을 호출하고 DagsHub/MLflow 로깅만 담당하는 얇은

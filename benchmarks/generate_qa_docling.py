@@ -1,3 +1,5 @@
+# Copyright 2026 docling-evidence-chunker contributors
+# SPDX-License-Identifier: Apache-2.0
 """
 generate_qa_docling.py — 벤치마크용 Q&A 자동 생성기 (자기참조 0, 결정적)
 

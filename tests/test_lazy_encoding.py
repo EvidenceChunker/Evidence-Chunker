@@ -1,3 +1,5 @@
+# Copyright 2026 docling-evidence-chunker contributors
+# SPDX-License-Identifier: Apache-2.0
 """
 tokens.py의 tiktoken 인코더 로딩이 지연(lazy)되는지 확인.
 

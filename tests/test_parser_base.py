@@ -1,3 +1,5 @@
+# Copyright 2026 docling-evidence-chunker contributors
+# SPDX-License-Identifier: Apache-2.0
 """
 parser.base.TableBlock의 헬퍼(num_data_rows, last_column_values)를
 합성 데이터로 검증 — PDF 파싱 없이 도는 빠른 회귀 테스트.

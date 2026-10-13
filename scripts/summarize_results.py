@@ -1,3 +1,5 @@
+# Copyright 2026 docling-evidence-chunker contributors
+# SPDX-License-Identifier: Apache-2.0
 """
 summarize_results.py — results/bench_v6_*.json 을 읽어서 GitHub Actions 의
 Step Summary(Actions 탭에서 바로 보이는 마크다운)로 출력한다.
@@ -67,13 +69,20 @@ def main() -> None:
                 f"{table_hit_1.get('eu', '-')} | {data.get('n_table_questions', '-')} |"
             )
 
-        stats = data.get("paired_statistics_page_hit_1_base_vs_eu")
-        if stats:
+        for metric_label, key in (
+            ("PageHit@1", "paired_statistics_page_hit_1_base_vs_eu"),
+            ("evidence_hit@1", "paired_statistics_evidence_hit_1_base_vs_eu"),
+            ("TableHit@1", "paired_statistics_table_hit_1_base_vs_eu"),
+        ):
+            stats = data.get(key)
+            if not stats:
+                continue
             ci = stats.get("cluster_bootstrap_ci95_pp")
             ci_str = f"[{ci[0]:+.1f}, {ci[1]:+.1f}]pp" if ci else "N/A"
+            sig = "" if (ci and ci[0] * ci[1] > 0) else "  ⚠️ CI가 0을 포함(유의하지 않음)"
             lines.append(
-                f"\nPageHit@1 문서단위 부트스트랩 차이: **{stats['difference_pp']:+.1f}pp** "
-                f"(95% CI {ci_str})\n"
+                f"\n{metric_label} 문서단위 부트스트랩 차이: **{stats['difference_pp']:+.1f}pp** "
+                f"(95% CI {ci_str}){sig}\n"
             )
 
         by_type = data.get("by_type") or {}

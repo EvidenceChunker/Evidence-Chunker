@@ -1,3 +1,5 @@
+# Copyright 2026 docling-evidence-chunker contributors
+# SPDX-License-Identifier: Apache-2.0
 """
 export.llamaindex의 to_llamaindex/to_llamaindex_units/dedupe_by_chunk_id/
 EvidenceRetriever가 실제 llama-index-core 설치 환경에서 동작하는지 검증.

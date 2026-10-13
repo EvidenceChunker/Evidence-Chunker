@@ -1,3 +1,5 @@
+# Copyright 2026 docling-evidence-chunker contributors
+# SPDX-License-Identifier: Apache-2.0
 """
 Docling DocumentConverter 팩토리 + DoclingParser(DoclingDocument -> ParsedDoc 변환).
 """

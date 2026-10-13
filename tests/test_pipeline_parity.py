@@ -1,3 +1,5 @@
+# Copyright 2026 docling-evidence-chunker contributors
+# SPDX-License-Identifier: Apache-2.0
 """
 EvidenceChunker.chunk()가 빌더와 분할을 제대로 엮고 있는지 두 각도로 잠근다:
 
