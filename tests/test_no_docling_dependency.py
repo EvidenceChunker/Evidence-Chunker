@@ -1,3 +1,5 @@
+# Copyright 2026 docling-evidence-chunker contributors
+# SPDX-License-Identifier: Apache-2.0
 """
 알고리즘 4개 모듈(caption/context/filters/flatten)이 Docling 없이도
 import된다는 것을 sys.meta_path 훅으로 docling import를 실제로 막고

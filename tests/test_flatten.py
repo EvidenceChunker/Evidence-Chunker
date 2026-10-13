@@ -1,3 +1,5 @@
+# Copyright 2026 docling-evidence-chunker contributors
+# SPDX-License-Identifier: Apache-2.0
 """
 flatten.py가 Docling과 완전히 무관함을 증명하는 테스트.
 

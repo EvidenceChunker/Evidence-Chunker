@@ -1,3 +1,5 @@
+# Copyright 2026 docling-evidence-chunker contributors
+# SPDX-License-Identifier: Apache-2.0
 """
 download_bench_data.py — DagsHub Storage 버킷(dnjsgkfka/Evidence-Chunker)에서
 pdfs/, auto_qa/ 를 받아온다. CI(GitHub Actions)에서 Kaggle 대신 쓰는 용도.

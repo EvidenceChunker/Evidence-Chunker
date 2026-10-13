@@ -1,3 +1,5 @@
+# Copyright 2026 docling-evidence-chunker contributors
+# SPDX-License-Identifier: Apache-2.0
 """
 캡션 예외처리 검증 — 캡션 없는 표 / 복수 캡션 / 다음(이전) 페이지 캡션.
 

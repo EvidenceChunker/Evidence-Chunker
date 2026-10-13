@@ -1,3 +1,5 @@
+# Copyright 2026 docling-evidence-chunker contributors
+# SPDX-License-Identifier: Apache-2.0
 """
 세션 전체에서 테스트 PDF 파싱을 정확히 한 번만 수행.
 

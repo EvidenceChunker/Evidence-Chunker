@@ -1,3 +1,5 @@
+# Copyright 2026 docling-evidence-chunker contributors
+# SPDX-License-Identifier: Apache-2.0
 """
 EvidenceChunker(parser=...) 생성자 주입이 실제로 동작한다는 실행 가능한 증거.
 

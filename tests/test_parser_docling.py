@@ -1,3 +1,5 @@
+# Copyright 2026 docling-evidence-chunker contributors
+# SPDX-License-Identifier: Apache-2.0
 """
 DoclingParser의 BOTTOMLEFT -> TOPLEFT bbox 변환이 맞는지 잠그는 테스트.
 
