@@ -58,7 +58,6 @@ def test_qa15_merged_first_row_caption(label,expected):
     assert map_table_caption(parsed([t]),t,0).confidence==expected
 
 @pytest.mark.spec("QA-15")
-@pytest.mark.spec_gap
 def test_qa15_caption_must_be_in_first_row():
     t=table()
     t.html='<table><tr><th>Name</th><th>Value</th></tr><tr><td colspan="2">Table 9: Quoted data</td></tr></table>'
@@ -124,7 +123,6 @@ def test_qa23_same_page_section_and_no_header():
     assert find_section_header(parsed(),1,400) is None
 
 @pytest.mark.spec("QA-23")
-@pytest.mark.spec_gap
 def test_qa23_previous_page_last_header_is_selected():
     ts=[text(0,"Earlier section",label="section_header",page=1,center=100),
         text(1,"Continuing section",label="section_header",page=1,center=800)]

@@ -55,7 +55,6 @@ def test_qa34_data_rows_and_sentences_preserved_once_in_order():
     assert [s for e in result.chunks for s in e.flattened_rows]==expected_sentences(24)
 
 @pytest.mark.spec("QA-34")
-@pytest.mark.spec_gap
 def test_qa34_final_text_respects_512_token_limit():
     e=raw_unit()
     result=split_eu(e)

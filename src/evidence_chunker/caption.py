@@ -204,17 +204,31 @@ _MERGED_HEADER_PATTERN = re.compile(
 )
 
 
+# 병합 셀 캡션 탐색은 표 "첫 행"만 본다. 이 규칙은 캡션이 표 안으로 빨려
+# 들어간 경우를 복구하려는 것이고, 캡션은 표 위에 붙으므로 표 HTML 안에서는
+# 첫 행으로만 나타난다. 범위를 풀면 표 중간의 그룹 구분 행, "Table 9:
+# (continued)" 같은 반복 머리글, 다른 표를 가리키는 셀 값까지 캡션으로
+# 채택돼 EU 전체(text/retrieval_text/retrieval_units/table_abstract)에
+# 잘못된 정체성이 복제된다.
+_FIRST_ROW_PATTERN = re.compile(r"<tr[^>]*>(.*?)</tr>", re.IGNORECASE | re.DOTALL)
+
+
 def _find_caption_in_merged_header(table_html: Optional[str]) -> Optional[str]:
     """
-    표 첫 행이 다수 컬럼을 병합한 th/td 하나로만 이루어져 있고, 그 안 텍스트가
-    캡션 패턴(_looks_like_table_caption)에 맞으면 채택.
+    표 첫 행에 여러 컬럼을 병합한 th/td가 있고, 그 안 텍스트가 캡션
+    패턴(_looks_like_table_caption)에 맞으면 채택.
+
+    첫 행에서 못 찾으면 더 아래 행은 보지 않는다 — 윗주석 참고.
 
     Returns:
         caption_text — 못 찾으면 None
     """
     if not table_html:
         return None
-    m = _MERGED_HEADER_PATTERN.search(table_html)
+    first_row = _FIRST_ROW_PATTERN.search(table_html)
+    if not first_row:
+        return None
+    m = _MERGED_HEADER_PATTERN.search(first_row.group(1))
     if not m:
         return None
     cell_text = re.sub(r"<[^>]+>", " ", m.group(2)).strip()
