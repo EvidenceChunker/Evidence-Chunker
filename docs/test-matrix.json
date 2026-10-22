@@ -1,0 +1,888 @@
+[
+  {
+    "id": "QA-01",
+    "original_categories": [
+      "패키지 설치",
+      "pip 설치",
+      "기본 설치 (pip install evidence-chunker로 필수 라이브러리와 함께 설치)"
+    ],
+    "original_test_requirement": "새 가상환경에서 설치가 오류 없이 끝나고 import evidence_chunker가 실행되는지 확인",
+    "existing_tests": [],
+    "new_tests": [
+      {
+        "name": "tests/specification/test_spec_external.py::test_qa01_clean_venv_install_and_import",
+        "result": "SKIP 1"
+      }
+    ],
+    "improvement_and_scope": "새 가상환경 설치 시험을 새로 작성했으나 실행하지 않았습니다. 기본 대상은 제출 문구대로 PyPI의 evidence-chunker입니다. 이는 현재 소스 커밋 검증과 다릅니다. 현재 코드도 검증하려면 --spec-install-target에 로컬 저장소 절대경로 또는 빌드 wheel을 별도로 지정하세요."
+  },
+  {
+    "id": "QA-02",
+    "original_categories": [
+      "실행 설정",
+      "추출기 생성",
+      "EvidenceChunker 생성 (기본값으로 바로 사용 가능)"
+    ],
+    "original_test_requirement": "인자 없이 생성되고 기본값(bbox_threshold 300, sim_threshold 0.0)이 적용되는지 확인",
+    "existing_tests": [],
+    "new_tests": [
+      {
+        "name": "tests/specification/test_spec_core.py::test_qa02_default_constructor",
+        "result": "PASS 1"
+      }
+    ],
+    "improvement_and_scope": "현재 기본값과 명세가 일치합니다. 추가 구현 보완을 요구하지 않습니다."
+  },
+  {
+    "id": "QA-03",
+    "original_categories": [
+      "실행 설정",
+      "모델 경로 지정",
+      "artifacts_path로 로컬에 받아둔 Docling 모델 사용"
+    ],
+    "original_test_requirement": "artifacts_path로 지정한 모델 폴더 경로가 설정에 저장되는지 확인",
+    "existing_tests": [],
+    "new_tests": [
+      {
+        "name": "tests/specification/test_spec_core.py::test_qa03_artifacts_path_is_stored",
+        "result": "PASS 1"
+      }
+    ],
+    "improvement_and_scope": "제출 시험항목은 경로 저장 확인이므로 해당 조건을 검증합니다. 로컬 모델이 실제로 로딩되고 오프라인 파싱되는지까지는 이 시험의 범위가 아닙니다."
+  },
+  {
+    "id": "QA-04",
+    "original_categories": [
+      "실행 설정",
+      "파라미터 설정",
+      "bbox_threshold(문맥 수집 범위, 기본 300pt), sim_threshold(유사도 임계값, 기본 0.0) 사용자 지정"
+    ],
+    "original_test_requirement": "bbox_threshold 값에 따라 수집되는 문맥 단락이 달라지고 sim_threshold 값이 저장되는지 확인",
+    "existing_tests": [],
+    "new_tests": [
+      {
+        "name": "tests/specification/test_spec_core.py::test_qa04_parameters_change_context_selection",
+        "result": "PASS 1"
+      }
+    ],
+    "improvement_and_scope": "직접 만든 문단 좌표로 bbox_threshold가 결과를 바꾸는지 확인합니다. 유사도 필터의 실제 모델 동작은 QA-24에서 별도 검증합니다."
+  },
+  {
+    "id": "QA-05",
+    "original_categories": [
+      "실행 설정",
+      "추출 실행",
+      "chunk(): PDF에서 표(EU)만 추출"
+    ],
+    "original_test_requirement": "표 EU만 반환되고 표 개수가 맞으며, 512토큰 초과 표는 분할되고 표가 없으면 빈 목록이며, 일반 표 1개와 분할 표 1개의 데이터가 원본과 내용이 같은지 확인",
+    "existing_tests": [
+      {
+        "name": "tests/test_pipeline_parity.py::test_chunk_applies_split",
+        "result": "SKIP 1"
+      },
+      {
+        "name": "tests/test_pipeline_parity.py::test_chunk_wires_split",
+        "result": "PASS 1"
+      },
+      {
+        "name": "tests/test_parser_injection.py::test_chunk_uses_injected_parser_without_docling",
+        "result": "PASS 1"
+      }
+    ],
+    "new_tests": [
+      {
+        "name": "tests/specification/test_spec_core.py::test_qa05_chunk_preserves_normal_and_split_table_data",
+        "result": "PASS 1"
+      },
+      {
+        "name": "tests/specification/test_spec_core.py::test_qa05_no_tables_returns_empty_list",
+        "result": "PASS 1"
+      },
+      {
+        "name": "tests/specification/test_spec_external.py::test_qa05_qa30_real_pdf_content_matches_oracle",
+        "result": "SKIP 1"
+      }
+    ],
+    "improvement_and_scope": "기존 테스트는 분할 연결·주입 파서 경로 일부만 검증합니다. 일반 표와 분할 표의 실제 데이터 보존, 빈 표 목록을 보충했습니다. 512 초과는 QA-37의 분할 제외 조건을 함께 적용합니다. 실제 PDF의 원문 비교는 정답 파일 준비 후 실행해야 합니다. 최종 토큰 상한 보완은 GAP-01/QA-34입니다."
+  },
+  {
+    "id": "QA-06",
+    "original_categories": [
+      "실행 설정",
+      "추출 실행",
+      "doc_id 지정 (생략 시 파일명 사용)"
+    ],
+    "original_test_requirement": "지정한 doc_id가 eu_id와 metadata에 반영되고, 생략하면 파일명(확장자 제외)이 쓰이는지 확인",
+    "existing_tests": [],
+    "new_tests": [
+      {
+        "name": "tests/specification/test_spec_core.py::test_qa06_document_id",
+        "result": "PASS 2"
+      }
+    ],
+    "improvement_and_scope": "명시 doc_id와 파일명 기본값을 모두 새로 검증합니다."
+  },
+  {
+    "id": "QA-07",
+    "original_categories": [
+      "PDF 파싱",
+      "Docling 파서 연동",
+      "PDF → DoclingDocument 변환 (Docling 표 구조 인식 사용)"
+    ],
+    "original_test_requirement": "PDF가 오류 없이 변환되고 인식한 표 개수가 사람이 센 표 개수와 같은지 확인",
+    "existing_tests": [],
+    "new_tests": [
+      {
+        "name": "tests/specification/test_spec_external.py::test_qa07_pdf_parser_matches_human_table_count",
+        "result": "SKIP 1"
+      }
+    ],
+    "improvement_and_scope": "사람이 센 표 개수와 비교하는 PDF 시험을 작성했습니다. PDF와 독립 검수 정답이 없으므로 미실행입니다. 파서 출력으로 정답 표 수를 자동 생성하지 않았습니다."
+  },
+  {
+    "id": "QA-08",
+    "original_categories": [
+      "PDF 파싱",
+      "Docling 파서 연동",
+      "DoclingDocument → 내부 문서 모델(ParsedDoc) 변환 (좌표계 정규화 포함)"
+    ],
+    "original_test_requirement": "좌표가 좌상단 원점으로 정규화되고 캡션 참조가 정수 인덱스로 바뀌며 표·텍스트·쪽 수가 보존되는지 확인",
+    "existing_tests": [
+      {
+        "name": "tests/test_parser_docling.py::test_bbox_flip_preserves_visual_order",
+        "result": "SKIP 1"
+      },
+      {
+        "name": "tests/test_parser_docling.py::test_table_bbox_flip",
+        "result": "SKIP 1"
+      },
+      {
+        "name": "tests/test_parser_docling.py::test_bbox_flip_same_relative_order_as_raw",
+        "result": "SKIP 1"
+      }
+    ],
+    "new_tests": [
+      {
+        "name": "tests/specification/test_spec_core.py::test_qa08_adapter_preserves_counts_refs_and_coordinates",
+        "result": "PASS 1"
+      },
+      {
+        "name": "tests/specification/test_spec_external.py::test_qa08_real_adapter_preserves_counts_refs_and_coords",
+        "result": "SKIP 1"
+      }
+    ],
+    "improvement_and_scope": "기존 테스트는 좌표 위주입니다. 참조 정수 변환·표/텍스트/쪽 수 보존을 합성 어댑터 입력으로 보충하고 실제 PDF 시험도 추가했습니다. 실제 PDF 시험은 미실행입니다."
+  },
+  {
+    "id": "QA-09",
+    "original_categories": [
+      "표 필터링",
+      "중복 표 제거",
+      "Docling이 한 표를 둘로 인식한 경우 더 세밀한 쪽만 남김 (캡션은 남는 쪽으로 승계)"
+    ],
+    "original_test_requirement": "같은 쪽에서 내용이 60% 이상 겹치는 표는 행이 많은 쪽만 남고 제거된 표의 캡션이 승계되며, 겹치지 않으면 둘 다 남는지 확인",
+    "existing_tests": [],
+    "new_tests": [
+      {
+        "name": "tests/specification/test_spec_layout.py::test_qa09_duplicate_threshold_and_caption_inheritance",
+        "result": "PASS 2"
+      }
+    ],
+    "improvement_and_scope": "60%는 원시 텍스트 일치율이 아닌 정규화 셀 토큰 집합의 containment 비율입니다. 40%/60% 사례와 많은 행 선택·캡션 승계·비중복 표 보존을 검증합니다. 캡션 승계는 남는 표에 자체 캡션이 없을 때 적용됩니다. 항상 덮어쓰려는 요구라면 승계 우선순위 보완이 필요합니다."
+  },
+  {
+    "id": "QA-10",
+    "original_categories": [
+      "표 필터링",
+      "오탐 표 제거",
+      "목차·그림 목차(TOC/LOF)가 표로 인식된 경우 제외"
+    ],
+    "original_test_requirement": "앞쪽(5쪽 이내)의 목차 표는 제외되고 조건이 맞지 않는 표와 본문 표는 남는지 확인",
+    "existing_tests": [],
+    "new_tests": [
+      {
+        "name": "tests/specification/test_spec_layout.py::test_qa10_toc_filter_and_nonmatches",
+        "result": "PASS 4"
+      }
+    ],
+    "improvement_and_scope": "실제 is_toc_or_lof_decoy와 빌더 제외까지 시험합니다. 페이지·숫자 비율·제목 조건을 충족하지 않는 대조 사례도 포함합니다."
+  },
+  {
+    "id": "QA-11",
+    "original_categories": [
+      "캡션 ↔ 표 연결",
+      "직접 연결",
+      "Docling 캡션 참조 중 \"Table N / 표 N\" 형식 텍스트만 채택 (신뢰도 direct)"
+    ],
+    "original_test_requirement": "\"Table N\" 참조는 direct로 연결되고 그림 캡션을 가리키는 참조는 채택되지 않는지 확인",
+    "existing_tests": [
+      {
+        "name": "tests/test_caption_exceptions.py::test_direct_ref_to_real_table_caption_unaffected",
+        "result": "PASS 1"
+      },
+      {
+        "name": "tests/test_caption_exceptions.py::test_direct_ref_pointing_to_figure_caption_is_downgraded",
+        "result": "PASS 1"
+      }
+    ],
+    "new_tests": [],
+    "improvement_and_scope": "기존 함수명만 연결합니다. 현재 구현은 그림 참조를 direct로 채택하지 않지만 bbox fallback으로 inferred 캡션을 보존할 수 있습니다. 표 정체성은 QA-17의 safe_caption에서 제외합니다. 제출 문구의 ‘채택되지 않음’을 caption_text 자체에도 절대 들어가면 안 된다는 의미로 정했다면 별도 구현 보완이 필요합니다."
+  },
+  {
+    "id": "QA-12",
+    "original_categories": [
+      "캡션 ↔ 표 연결",
+      "직접 연결",
+      "캡션이 여러 개인 표의 캡션 병합"
+    ],
+    "original_test_requirement": "표 캡션 여러 줄이 하나로 병합되고 그림 캡션 조각은 빠지는지 확인",
+    "existing_tests": [
+      {
+        "name": "tests/test_caption_exceptions.py::test_multi_caption",
+        "result": "PASS 1"
+      },
+      {
+        "name": "tests/test_caption_exceptions.py::test_multi_caption_excludes_figure_fragment",
+        "result": "PASS 1"
+      }
+    ],
+    "new_tests": [],
+    "improvement_and_scope": "기존 두 테스트가 복수 표 캡션 병합과 그림 조각 제외를 검증합니다. 새 테스트를 중복 작성하지 않았습니다."
+  },
+  {
+    "id": "QA-13",
+    "original_categories": [
+      "캡션 ↔ 표 연결",
+      "fallback 연결",
+      "같은 페이지 bbox 거리(200pt 이내) 기반 추정 (신뢰도 inferred)"
+    ],
+    "original_test_requirement": "캡션이 표에서 199pt, 200pt이면 inferred로 연결되고 201pt이면 연결되지 않는지 확인",
+    "existing_tests": [],
+    "new_tests": [
+      {
+        "name": "tests/specification/test_spec_layout.py::test_qa13_caption_distance_boundary",
+        "result": "PASS 3"
+      }
+    ],
+    "improvement_and_scope": "199/200/201pt 경계값을 새로 검증합니다. 거리 기준은 표 경계에서 후보 문단 bbox 중심까지입니다."
+  },
+  {
+    "id": "QA-14",
+    "original_categories": [
+      "캡션 ↔ 표 연결",
+      "fallback 연결",
+      "인접 페이지 캡션 탐색 (표가 페이지 상·하단 15% 이내일 때)"
+    ],
+    "original_test_requirement": "표가 쪽 상/하단 15% 이내이면 이웃 쪽 캡션을 찾고 쪽 중간이면 찾지 않는지 확인",
+    "existing_tests": [
+      {
+        "name": "tests/test_caption_exceptions.py::test_caption_on_previous_page",
+        "result": "PASS 1"
+      },
+      {
+        "name": "tests/test_caption_exceptions.py::test_caption_on_next_page",
+        "result": "PASS 1"
+      },
+      {
+        "name": "tests/test_caption_exceptions.py::test_middle_of_page_ignores_adjacent_caption",
+        "result": "PASS 1"
+      }
+    ],
+    "new_tests": [],
+    "improvement_and_scope": "기존 이전/다음 페이지 및 중간 위치 차단 테스트의 함수명만 연결합니다."
+  },
+  {
+    "id": "QA-15",
+    "original_categories": [
+      "캡션 ↔ 표 연결",
+      "fallback 연결",
+      "표 첫 행 병합 셀 안의 캡션 탐색"
+    ],
+    "original_test_requirement": "병합(colspan) 셀 안 문구가 \"Table N\" 형식이면 캡션으로 채택되고 아니면 채택되지 않는지 확인",
+    "existing_tests": [],
+    "new_tests": [
+      {
+        "name": "tests/specification/test_spec_layout.py::test_qa15_merged_first_row_caption",
+        "result": "PASS 2"
+      },
+      {
+        "name": "tests/specification/test_spec_layout.py::test_qa15_caption_must_be_in_first_row",
+        "result": "FAIL 1"
+      }
+    ],
+    "improvement_and_scope": "첫 행의 정상·비캡션 사례는 통과합니다. 현재 구현은 HTML 전체에서 colspan을 검색하여 두 번째 행도 캡션으로 선택합니다. ‘표 첫 행’ 기능을 충족하려면 첫 tr 내부로 탐색을 제한해야 합니다. GAP-02 재현 테스트는 실제 FAIL입니다."
+  },
+  {
+    "id": "QA-16",
+    "original_categories": [
+      "캡션 ↔ 표 연결",
+      "fallback 연결",
+      "캡션 없는 표 처리 (신뢰도 none)"
+    ],
+    "original_test_requirement": "캡션 후보가 없어도 오류 없이 EU가 생성되고 신뢰도가 none인지 확인",
+    "existing_tests": [
+      {
+        "name": "tests/test_caption_exceptions.py::test_no_caption",
+        "result": "PASS 1"
+      }
+    ],
+    "new_tests": [
+      {
+        "name": "tests/specification/test_spec_core.py::test_qa16_missing_caption_still_builds_eu",
+        "result": "PASS 1"
+      }
+    ],
+    "improvement_and_scope": "기존 test_no_caption은 매핑만 확인합니다. 캡션 없이도 EU 빌더가 정상 반환하는 검증을 추가했습니다."
+  },
+  {
+    "id": "QA-17",
+    "original_categories": [
+      "캡션 ↔ 표 연결",
+      "캡션 검증",
+      "그림(Fig./Figure/그림) 캡션이 표에 잘못 연결된 경우 걸러내기 (safe_caption)"
+    ],
+    "original_test_requirement": "그림 캡션이 연결된 표에서 safe_caption이 None이고 원본 caption_text는 남는지 확인",
+    "existing_tests": [],
+    "new_tests": [
+      {
+        "name": "tests/specification/test_spec_layout.py::test_qa17_safe_caption_preserves_original",
+        "result": "PASS 3"
+      }
+    ],
+    "improvement_and_scope": "safe_caption의 None과 원본 caption_text 보존을 Fig./Figure/그림 세 가지로 검증합니다."
+  },
+  {
+    "id": "QA-18",
+    "original_categories": [
+      "캡션 ↔ 표 연결",
+      "캡션 검증",
+      "걸러낸 그림 캡션은 문맥 단락 맨 앞에 보존하고 표 요약에서는 제거"
+    ],
+    "original_test_requirement": "걸러낸 그림 캡션이 문맥의 첫 항목이고 표 요약(safe_abstract)에서는 빠지는지 확인",
+    "existing_tests": [],
+    "new_tests": [
+      {
+        "name": "tests/specification/test_spec_layout.py::test_qa18_figure_caption_fallback_and_safe_abstract",
+        "result": "PASS 1"
+      }
+    ],
+    "improvement_and_scope": "문맥 뷰 맨 앞 보존과 safe_abstract 제거를 검증합니다. 현재 저장 필드 context_before를 직접 바꾸는 것은 아니고 context_before_with_fallback 계산 속성에서 보존합니다."
+  },
+  {
+    "id": "QA-19",
+    "original_categories": [
+      "각주 처리",
+      "각주 수집",
+      "표에 연결된 각주(첫 번째 1개) 수집"
+    ],
+    "original_test_requirement": "표에 연결된 첫 번째 각주가 EU에 포함되고 각주가 없으면 비어 있는지 확인",
+    "existing_tests": [],
+    "new_tests": [
+      {
+        "name": "tests/specification/test_spec_core.py::test_qa19_first_footnote_only",
+        "result": "PASS 2"
+      }
+    ],
+    "improvement_and_scope": "여러 각주 중 첫 번째만 수집하며 각주 없는 경우 None인 조건을 검증합니다."
+  },
+  {
+    "id": "QA-20",
+    "original_categories": [
+      "인접 문맥 부착",
+      "설명 단락 탐지",
+      "bbox 거리(기본 300pt) 내 표 위·아래 단락 수집"
+    ],
+    "original_test_requirement": "300pt 이내의 위·아래 단락은 수집되고 300pt 밖은 수집되지 않는지 확인",
+    "existing_tests": [],
+    "new_tests": [
+      {
+        "name": "tests/specification/test_spec_layout.py::test_qa20_context_distance_boundary",
+        "result": "PASS 6"
+      }
+    ],
+    "improvement_and_scope": "위·아래 각각 299/300/301pt 경계값을 검증합니다."
+  },
+  {
+    "id": "QA-21",
+    "original_categories": [
+      "인접 문맥 부착",
+      "설명 단락 탐지",
+      "섹션 경계 감지로 다른 섹션 단락 과포함 방지 (같은 쪽 기준)"
+    ],
+    "original_test_requirement": "같은 쪽에서 섹션 제목을 넘어선 단락이 수집되지 않는지 확인",
+    "existing_tests": [],
+    "new_tests": [
+      {
+        "name": "tests/specification/test_spec_layout.py::test_qa21_same_page_section_boundary",
+        "result": "PASS 2"
+      }
+    ],
+    "improvement_and_scope": "같은 페이지 위·아래 섹션 경계에 대해 다른 섹션 문단이 제외되는지 검증합니다."
+  },
+  {
+    "id": "QA-22",
+    "original_categories": [
+      "인접 문맥 부착",
+      "설명 단락 탐지",
+      "인접 페이지 단락 수집 (표가 페이지 상·하단 15% 이내일 때)"
+    ],
+    "original_test_requirement": "표가 쪽 상/하단 15% 이내이면 이웃 쪽 단락이 수집되고 쪽 중간이면 수집되지 않는지 확인",
+    "existing_tests": [],
+    "new_tests": [
+      {
+        "name": "tests/specification/test_spec_layout.py::test_qa22_adjacent_page_context_gate",
+        "result": "PASS 4"
+      }
+    ],
+    "improvement_and_scope": "이전/다음 페이지 탐색을 각각 15%/85% 경계 안팎에서 검증하고 page_span도 확인합니다."
+  },
+  {
+    "id": "QA-23",
+    "original_categories": [
+      "인접 문맥 부착",
+      "섹션 정보",
+      "표가 속한 섹션 헤더 탐지"
+    ],
+    "original_test_requirement": "section_header가 원본 PDF의 정답 제목과 같고 제목이 없으면 비어 있는지 확인",
+    "existing_tests": [],
+    "new_tests": [
+      {
+        "name": "tests/specification/test_spec_layout.py::test_qa23_same_page_section_and_no_header",
+        "result": "PASS 1"
+      },
+      {
+        "name": "tests/specification/test_spec_layout.py::test_qa23_previous_page_last_header_is_selected",
+        "result": "FAIL 1"
+      },
+      {
+        "name": "tests/specification/test_spec_external.py::test_qa23_pdf_section_headers_match_human_oracle",
+        "result": "SKIP 1"
+      }
+    ],
+    "improvement_and_scope": "같은 페이지 최근 제목 및 제목 없음은 통과합니다. 이전 페이지에 헤더가 여러 개면 현재는 위쪽 헤더를 선택해 잘못된 섹션이 연결됩니다. GAP-03: 가장 가까운 이전 페이지의 가장 아래 헤더를 선택하도록 보완해야 합니다. 실제 PDF 정답 제목 비교도 추가했으나 미실행입니다."
+  },
+  {
+    "id": "QA-24",
+    "original_categories": [
+      "인접 문맥 부착",
+      "유사도 필터(선택)",
+      "sim_threshold > 0일 때 코사인 유사도로 문맥 단락 추가 필터링"
+    ],
+    "original_test_requirement": "sim_threshold를 0에서 0.9로 올리면 문맥 단락 수가 같거나 줄고 적어도 한 표에서는 줄어드는지 확인",
+    "existing_tests": [],
+    "new_tests": [
+      {
+        "name": "tests/specification/test_spec_external.py::test_qa24_real_similarity_filter_reduces_candidates",
+        "result": "SKIP 1"
+      }
+    ],
+    "improvement_and_scope": "실제 sentence-transformers 모델로 캡션과 동일한 문단 및 무관한 문단을 비교하는 시험을 작성했습니다. 모델·다운로드가 필요해 미실행입니다. 임의 논문에서 반드시 감소한다고 가정하지 않고 감소 조건을 갖춘 입력을 사용합니다. 패키지가 없으면 시험은 실패하며, 라이브러리의 조용한 필터 우회로 PASS하지 않습니다."
+  },
+  {
+    "id": "QA-25",
+    "original_categories": [
+      "표 텍스트화",
+      "헤더 처리",
+      "다단·병합 열 헤더, 병합 행 헤더 매핑"
+    ],
+    "original_test_requirement": "다단 열 헤더가 상위 / 하위로 이어붙고 병합된 행 헤더가 해당 행들에 적용되는지 확인",
+    "existing_tests": [
+      {
+        "name": "tests/test_flatten.py::test_build_col_header_map",
+        "result": "PASS 1"
+      },
+      {
+        "name": "tests/test_flatten.py::test_build_row_header_map",
+        "result": "PASS 1"
+      }
+    ],
+    "new_tests": [
+      {
+        "name": "tests/specification/test_spec_text.py::test_qa25_multilevel_columns_and_spanning_rows",
+        "result": "PASS 1"
+      }
+    ],
+    "improvement_and_scope": "기존은 단순 헤더 맵 위주여서 다단 열·colspan·rowspan 사례를 추가했습니다."
+  },
+  {
+    "id": "QA-26",
+    "original_categories": [
+      "표 텍스트화",
+      "헤더 처리",
+      "헤더 표시가 없는 표는 첫 행을 헤더로 추론 (숫자 행이면 Col0, Col1…로 대체)"
+    ],
+    "original_test_requirement": "헤더 태그가 없으면 첫 행이 헤더로 쓰이고 숫자 행이면 Col0, Col1…로 대체되는지 확인",
+    "existing_tests": [
+      {
+        "name": "tests/test_flatten.py::test_infer_headers_fallback_when_no_column_header",
+        "result": "PASS 1"
+      }
+    ],
+    "new_tests": [
+      {
+        "name": "tests/specification/test_spec_text.py::test_qa26_unmarked_header_and_numeric_fallback",
+        "result": "PASS 2"
+      }
+    ],
+    "improvement_and_scope": "기존 혼합 숫자/텍스트 사례에 더해 전체 문자 첫 행과 전체 숫자 첫 행을 검증합니다."
+  },
+  {
+    "id": "QA-27",
+    "original_categories": [
+      "표 텍스트화",
+      "셀 문장 변환",
+      "셀을 \"[행헤더 | ]열헤더: 값\" 형식 문장으로 변환"
+    ],
+    "original_test_requirement": "셀 문장이 행헤더 | 열헤더: 값(행 헤더 없으면 열헤더: 값) 형식이고 값이 원본과 같은지 확인",
+    "existing_tests": [
+      {
+        "name": "tests/test_flatten.py::test_group_sentences_by_row",
+        "result": "PASS 1"
+      }
+    ],
+    "new_tests": [
+      {
+        "name": "tests/specification/test_spec_text.py::test_qa27_cell_text_with_and_without_row_header",
+        "result": "PASS 2"
+      }
+    ],
+    "improvement_and_scope": "기존은 행 헤더가 있는 사례입니다. 없는 경우 ‘열헤더: 값’도 보충했습니다."
+  },
+  {
+    "id": "QA-28",
+    "original_categories": [
+      "표 텍스트화",
+      "각주 마커 처리",
+      "각주 마커가 있는 셀 문장에 각주 내용 첨부"
+    ],
+    "original_test_requirement": "마커가 있는 셀 문장 끝에 각주 내용(없으면 마커 문자)이 붙고 마커 없는 셀에는 붙지 않는지 확인",
+    "existing_tests": [
+      {
+        "name": "tests/test_flatten.py::test_detect_cell_marker",
+        "result": "PASS 1"
+      },
+      {
+        "name": "tests/test_flatten.py::test_group_sentences_by_row",
+        "result": "PASS 1"
+      }
+    ],
+    "new_tests": [
+      {
+        "name": "tests/specification/test_spec_text.py::test_qa28_footnote_text_or_marker_attached",
+        "result": "PASS 2"
+      }
+    ],
+    "improvement_and_scope": "기존은 마커 분리와 마커 문자 fallback 위주입니다. 실제 각주 내용 첨부와 마커 없는 셀에 미첨부 조건을 추가했습니다."
+  },
+  {
+    "id": "QA-29",
+    "original_categories": [
+      "표 텍스트화",
+      "표 요약",
+      "표 한 줄 요약(table_abstract) 자동 생성 (섹션·캡션·열 헤더·행 수 기반, LLM 미사용)"
+    ],
+    "original_test_requirement": "요약이 [섹션] 캡션 Columns: … N data row(s). 형식이고 같은 입력에는 항상 같은 결과인지 확인",
+    "existing_tests": [
+      {
+        "name": "tests/test_flatten.py::test_build_table_abstract_includes_section_header_and_caption",
+        "result": "PASS 1"
+      }
+    ],
+    "new_tests": [
+      {
+        "name": "tests/specification/test_spec_text.py::test_qa29_abstract_is_deterministic",
+        "result": "PASS 1"
+      }
+    ],
+    "improvement_and_scope": "기존 형식 시험은 유지하고 같은 입력의 반복 호출 결과를 추가로 검증했습니다. 현재 행 수 문자열은 num_rows-1이므로 다단 헤더에서 실제 데이터 행 수까지 정확해야 한다면 별도 보완이 필요합니다."
+  },
+  {
+    "id": "QA-30",
+    "original_categories": [
+      "Evidence Unit 생성",
+      "EU 구성",
+      "표 단위 EU 생성 (캡션 + 표 HTML + 각주 + 설명 단락 + 섹션 헤더)"
+    ],
+    "original_test_requirement": "원본 표에 있는 캡션, 각주, 설명 단락, 섹션 제목 등의 요소들이 모두 EU 텍스트에 들어있고, 없는 것(예: 각주 없는 표)은 비어 있는지 확인",
+    "existing_tests": [],
+    "new_tests": [
+      {
+        "name": "tests/specification/test_spec_core.py::test_qa30_evidence_contains_available_components",
+        "result": "PASS 1"
+      },
+      {
+        "name": "tests/specification/test_spec_external.py::test_qa05_qa30_real_pdf_content_matches_oracle",
+        "result": "SKIP 1"
+      }
+    ],
+    "improvement_and_scope": "합성 원문의 캡션·각주·문맥·섹션·HTML과 없는 필드를 검증했습니다. 실제 PDF 원문 요소 비교는 독립 정답 데이터가 필요해 미실행입니다. ‘모든 원문 설명’이 거리 밖 문단까지 뜻한다면 현재 위치 기반 수집 범위를 넘어서는 기능 보완이 필요합니다."
+  },
+  {
+    "id": "QA-31",
+    "original_categories": [
+      "Evidence Unit 생성",
+      "텍스트 뷰",
+      "text(LLM 컨텍스트용), retrieval_text(임베딩용), retrieval_units(셀 문장 단위 small-to-big용)"
+    ],
+    "original_test_requirement": "세 뷰가 있고 retrieval_text에 표 HTML이 없으며 retrieval_units가 셀 문장 단위로 나뉘고 [캡션] 접두가 붙는지 확인",
+    "existing_tests": [],
+    "new_tests": [
+      {
+        "name": "tests/specification/test_spec_core.py::test_qa31_text_views_and_cell_unit_prefix",
+        "result": "PASS 1"
+      }
+    ],
+    "improvement_and_scope": "HTML 포함/제외와 개별 셀 문자열의 [캡션] prefix를 검증했습니다. retrieval_units에는 요약·문단·각주도 들어가므로 셀 문자열만 있는 목록이라고 단정하지 않습니다."
+  },
+  {
+    "id": "QA-32",
+    "original_categories": [
+      "Evidence Unit 생성",
+      "메타데이터",
+      "chunk_id, eu_id, doc_id, page_no, page_span, table_index, section_header, caption_text, bbox, is_split, split_index, total_splits, caption_confidence, retrieval_text (14개 키)"
+    ],
+    "original_test_requirement": "모든 EU에 14개 키가 있고 eu_id가 유일하며 bbox가 0~1 범위인지 확인",
+    "existing_tests": [],
+    "new_tests": [
+      {
+        "name": "tests/specification/test_spec_core.py::test_qa32_metadata_keys_unique_ids_and_bbox",
+        "result": "PASS 1"
+      }
+    ],
+    "improvement_and_scope": "키 수뿐 아니라 14개 키 집합을 정확히 비교합니다. 정상 좌표의 일반·분할 EU에 대해 ID 유일성과 bbox 범위를 확인했습니다. 파서가 범위 밖 좌표를 주어도 무조건 0~1이어야 한다면 입력 검증/clipping 보완이 추가로 필요합니다."
+  },
+  {
+    "id": "QA-33",
+    "original_categories": [
+      "큰 표 분할",
+      "토큰 계산",
+      "tiktoken(cl100k_base) 기준 EU 토큰 수 계산, 한도(512) 초과 감지"
+    ],
+    "original_test_requirement": "토큰 수가 tiktoken 값과 같고, 512토큰이면 분할하지 않고 513토큰이면 분할을 시도하며, 동일한 표에서 한도를 늘리면 조각 수가 줄어드는지 확인",
+    "existing_tests": [],
+    "new_tests": [
+      {
+        "name": "tests/specification/test_spec_split.py::test_qa33_token_count_matches_tiktoken",
+        "result": "PASS 1"
+      },
+      {
+        "name": "tests/specification/test_spec_split.py::test_qa33_exact_512_513_boundary",
+        "result": "PASS 2"
+      },
+      {
+        "name": "tests/specification/test_spec_split.py::test_qa33_larger_limit_reduces_chunk_count",
+        "result": "PASS 1"
+      }
+    ],
+    "improvement_and_scope": "실제 cl100k_base로 토큰 수·512/513 경계와 한도 증가 시 조각 수 감소를 확인했습니다. 토큰 카운터를 가짜 값으로 바꾸지 않았습니다. 513은 분할 시도 조건이며 결과가 반드시 여러 조각 또는 512 이하라는 뜻은 아닙니다."
+  },
+  {
+    "id": "QA-34",
+    "original_categories": [
+      "큰 표 분할",
+      "행 단위 분할",
+      "토큰 한도에 맞을 때까지 행을 채워가며 분할"
+    ],
+    "original_test_requirement": "표의 모든 행이 정확히 한 번씩 순서대로 포함되고 각 조각이 한도 이하이며 셀 문장이 누락 및 중복되지 않는지 확인",
+    "existing_tests": [],
+    "new_tests": [
+      {
+        "name": "tests/specification/test_spec_split.py::test_qa34_data_rows_and_sentences_preserved_once_in_order",
+        "result": "PASS 1"
+      },
+      {
+        "name": "tests/specification/test_spec_split.py::test_qa34_final_text_respects_512_token_limit",
+        "result": "FAIL 1"
+      }
+    ],
+    "improvement_and_scope": "데이터 행·셀 문자열의 순서/중복/누락은 통과합니다. 최종 text 길이 제한은 [803, 179]토큰으로 FAIL을 재현했습니다. GAP-01: HTML뿐 아니라 복제 문맥·요약·셀 문자열·각주까지 합친 최종 표현으로 분할 예산을 계산해야 합니다."
+  },
+  {
+    "id": "QA-35",
+    "original_categories": [
+      "큰 표 분할",
+      "행 단위 분할",
+      "캡션·섹션 헤더·열 헤더·문맥·표 요약을 모든 조각에 반복 (각주는 마지막 조각에만)"
+    ],
+    "original_test_requirement": "반복 요소가 모든 조각에 있고 각주는 마지막 조각에만 있는지 확인",
+    "existing_tests": [],
+    "new_tests": [
+      {
+        "name": "tests/specification/test_spec_split.py::test_qa35_repeated_fields_and_final_footnote_field",
+        "result": "PASS 1"
+      },
+      {
+        "name": "tests/specification/test_spec_split.py::test_qa35_full_footnote_text_only_in_last_chunk",
+        "result": "FAIL 1"
+      }
+    ],
+    "improvement_and_scope": "반복 필드와 footnote_text가 마지막 조각에만 있는 시험은 통과합니다. ‘각주 내용 자체도 앞 조각에 없어야 함’으로 읽은 추가 시험은 FAIL입니다. GAP-04는 요구 해석 결정이 필요합니다. QA-28의 셀 문장 각주 첨부와 함께 만족시킬 표현 정책을 정한 뒤 구현하세요."
+  },
+  {
+    "id": "QA-36",
+    "original_categories": [
+      "큰 표 분할",
+      "행 단위 분할",
+      "조각 ID({eu_id}-s{n}), split_index, total_splits 부여"
+    ],
+    "original_test_requirement": "조각 ID가 -s1, -s2…이고 split_index가 1부터 연속이며 total_splits가 조각 수와 같은지 확인",
+    "existing_tests": [],
+    "new_tests": [
+      {
+        "name": "tests/specification/test_spec_split.py::test_qa36_split_ids_indices_and_total",
+        "result": "PASS 1"
+      }
+    ],
+    "improvement_and_scope": "-s1부터 ID, split_index와 total_splits의 일치 및 is_split을 검증했습니다."
+  },
+  {
+    "id": "QA-37",
+    "original_categories": [
+      "큰 표 분할",
+      "분할 제외",
+      "초대형 표(3072토큰 초과)나 행 하나가 한도를 넘는 표는 분할하지 않고 원본 유지 (llm_summary 표시만 부여, 요약은 하지 않음)"
+    ],
+    "original_test_requirement": "3072토큰을 넘는 표와 행 하나가 한도를 넘는 표가 모두 분할되지 않고 llm_summary로 원본이 유지되는지 확인",
+    "existing_tests": [],
+    "new_tests": [
+      {
+        "name": "tests/specification/test_spec_split.py::test_qa37_oversized_or_single_row_returns_original",
+        "result": "PASS 2"
+      }
+    ],
+    "improvement_and_scope": "실제 토크나이저로 3072 초과와 512를 넘는 단일 행을 각각 만들고 원본 객체가 유지됨을 검증했습니다. llm_summary는 split_eu()의 SplitResult.strategy이며 고수준 chunk()의 EU metadata에는 표시되지 않습니다. 외부 API에서 표식을 보여주려는 요구라면 별도 필드 전파가 필요합니다."
+  },
+  {
+    "id": "QA-38",
+    "original_categories": [
+      "검색 코퍼스 구성",
+      "코퍼스 빌드",
+      "build_corpus(): 표(EU) + 일반 본문(HybridChunker) 통합 반환"
+    ],
+    "original_test_requirement": "반환 목록에 표 EU와 일반 본문 청크가 모두 있는지 확인",
+    "existing_tests": [],
+    "new_tests": [
+      {
+        "name": "tests/specification/test_spec_external.py::test_qa38_real_build_corpus_contains_tables_and_text",
+        "result": "SKIP 1"
+      }
+    ],
+    "improvement_and_scope": "실제 build_corpus()가 두 타입을 함께 반환하는 통합 시험을 작성했습니다. 표와 비중복 본문이 존재하는 PDF가 필요해 미실행입니다. 파싱 결과만 재사용하고 실제 빌더·분할·HybridChunker·본문 필터를 실행하도록 구성했습니다."
+  },
+  {
+    "id": "QA-39",
+    "original_categories": [
+      "검색 코퍼스 구성",
+      "중복 제거",
+      "EU가 이미 흡수한 문단과 겹치는 일반 청크 자동 제거"
+    ],
+    "original_test_requirement": "EU 문맥에 들어간 문단이 본문 청크로 다시 나오지 않고 겹치지 않는 본문은 남는지 확인",
+    "existing_tests": [],
+    "new_tests": [
+      {
+        "name": "tests/specification/test_spec_core.py::test_qa39_consumed_paragraph_removed_unrelated_preserved",
+        "result": "PASS 1"
+      }
+    ],
+    "improvement_and_scope": "흡수된 문단 제거와 독립 본문 청크 보존을 검증했습니다. A+B 청크에서 A만 흡수된 경우 B까지 남겨야 한다는 요구라면 현재 전체 청크 제거 방식은 별도 보완해야 합니다."
+  },
+  {
+    "id": "QA-40",
+    "original_categories": [
+      "프레임워크 연동",
+      "LangChain",
+      "to_langchain(), to_langchain_units()(small-to-big) 문서 변환"
+    ],
+    "original_test_requirement": "Document로 변환되고 EU는 metadata 14개 키, 본문 청크는 5개 키를 갖는지 확인",
+    "existing_tests": [],
+    "new_tests": [
+      {
+        "name": "tests/specification/test_spec_frameworks.py::test_qa40_langchain_single_and_units_schema",
+        "result": "PASS 1"
+      }
+    ],
+    "improvement_and_scope": "실제 LangChain Document 타입 및 정확한 키 집합을 검증했습니다. 일반 변환은 retrieval_text를 포함한 EU 14키, units 변환은 retrieval_text 대신 parent_text를 포함한 14키입니다."
+  },
+  {
+    "id": "QA-41",
+    "original_categories": [
+      "프레임워크 연동",
+      "LangChain",
+      "EvidenceRetriever: 같은 chunk_id 중복을 제거한 검색 (max-pool dedupe)"
+    ],
+    "original_test_requirement": "질문으로 검색한 결과에 같은 chunk_id가 중복되지 않고 질문–정답 청크 쌍 하나가 상위에 포함되는지 확인",
+    "existing_tests": [],
+    "new_tests": [
+      {
+        "name": "tests/specification/test_spec_frameworks.py::test_qa41_real_vectorstore_question_hit_and_dedup",
+        "result": "PASS 1"
+      }
+    ],
+    "improvement_and_scope": "실제 InMemoryVectorStore와 고정 단어수 임베딩으로 색인→질문 검색→정답 청크 상위 포함→dedupe 경로를 실행했습니다. 사전학습 임베딩 모델의 의미 검색 품질이나 논문 전체 검색 성능을 검증한 것은 아닙니다."
+  },
+  {
+    "id": "QA-42",
+    "original_categories": [
+      "프레임워크 연동",
+      "LlamaIndex",
+      "to_llamaindex(), to_llamaindex_units() 노드 변환"
+    ],
+    "original_test_requirement": "노드로 변환되고 chunk_id가 전달되며 units가 small-to-big으로 풀리는지 확인",
+    "existing_tests": [
+      {
+        "name": "tests/test_export_llamaindex.py::test_to_llamaindex_one_node_per_chunk",
+        "result": "PASS 1"
+      },
+      {
+        "name": "tests/test_export_llamaindex.py::test_to_llamaindex_units_small_to_big",
+        "result": "PASS 1"
+      }
+    ],
+    "new_tests": [],
+    "improvement_and_scope": "기존 단일 노드·small-to-big 테스트의 함수명만 연결합니다. 실제 llama-index-core 설치 환경에서 기존 시험을 실행했습니다."
+  },
+  {
+    "id": "QA-43",
+    "original_categories": [
+      "프레임워크 연동",
+      "LlamaIndex",
+      "EvidenceRetriever: 같은 chunk_id 중복을 제거한 검색 (max-pool dedupe)"
+    ],
+    "original_test_requirement": "retrieve() 결과에서 같은 chunk_id가 한 번만 나오고 최대 k개로 잘리는지 확인",
+    "existing_tests": [
+      {
+        "name": "tests/test_export_llamaindex.py::test_evidence_retriever_wraps_and_dedupes",
+        "result": "PASS 1"
+      }
+    ],
+    "new_tests": [
+      {
+        "name": "tests/specification/test_spec_frameworks.py::test_qa43_llamaindex_wrapper_honors_k",
+        "result": "PASS 1"
+      }
+    ],
+    "improvement_and_scope": "기존 중복 제거 시험을 연결하고 k=1 반환 상한 검증만 보충했습니다. 검색기의 결과는 고정 입력으로 제공하여 래퍼 계약을 시험합니다."
+  },
+  {
+    "id": "QA-44",
+    "original_categories": [
+      "프레임워크 연동",
+      "검색 결과 후처리",
+      "dedupe_by_chunk_id(): 기존 검색 결과에서 같은 청크 중복 제거 (LangChain·LlamaIndex 공통)"
+    ],
+    "original_test_requirement": "같은 chunk_id에서 입력 순서상 첫 항목만 남고 순서/점수가 유지되며, LangChain, LlamaIndex의 목록과 점수 포함 목록에서 모두 동작하는지 확인",
+    "existing_tests": [
+      {
+        "name": "tests/test_export_llamaindex.py::test_dedupe_by_chunk_id_keeps_first_per_parent",
+        "result": "PASS 1"
+      }
+    ],
+    "new_tests": [
+      {
+        "name": "tests/specification/test_spec_frameworks.py::test_qa44_dedupe_all_result_forms_preserves_first_and_order",
+        "result": "PASS 4"
+      }
+    ],
+    "improvement_and_scope": "기존은 LlamaIndex 점수 포함 결과 위주입니다. LangChain 문서/점수 튜플과 LlamaIndex 노드/NodeWithScore 네 가지 형식에서 첫 객체·순서·점수 보존을 보충했습니다."
+  }
+]

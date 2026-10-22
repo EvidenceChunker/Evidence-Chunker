@@ -82,9 +82,10 @@ def find_section_header(parsed: "ParsedDoc", table_page: int, table_top_y: float
         return same_above[0][1]
 
     if prev_pages:
-        # 가장 가까운 이전 페이지 중, 그 페이지에서 가장 나중에 등장한
-        # (TOPLEFT cy 최솟값) 헤더.
-        prev_pages.sort(key=lambda x: (x[0], -x[1]))
+        # 가장 가까운 이전 페이지(page_no 최대)를 고르고, 그 페이지에서 시각적으로
+        # 가장 아래 = 가장 나중에 등장한 헤더를 고른다. TOPLEFT에서는 cy가 클수록
+        # 페이지 아래쪽이므로, 오름차순 정렬 후 마지막 원소가 (최대 page_no, 최대 cy)다.
+        prev_pages.sort(key=lambda x: (x[0], x[1]))
         return prev_pages[-1][2]
 
     return None
