@@ -23,7 +23,7 @@ from dataclasses import dataclass
 from bs4 import BeautifulSoup
 
 from .unit import EvidenceUnit
-from .tokens import count_tokens, DEFAULT_TOKEN_LIMIT
+from .tokens import count_tokens, count_eu_tokens, DEFAULT_TOKEN_LIMIT
 
 SPLIT_LIMIT = DEFAULT_TOKEN_LIMIT
 
@@ -107,11 +107,11 @@ def build_table(header_html, rows):
 
 
 def estimate_chunk_tokens(caption, html, footnote=""):
-    """분할 조각 하나의 토큰 수 추정 (캡션 + 표 HTML + 각주).
+    """캡션 + 표 HTML + 각주만 센 대략치 (하위 호환용 — 분할 예산에는 쓰지 않는다).
 
-    문맥 단락(context_before/after)은 모든 조각에 똑같이 복제되므로 여기서
-    세지 않는다 — 행을 어디서 끊을지에는 영향이 없지만, 그만큼 완성된
-    조각의 실제 토큰 수는 이 추정치보다 크다.
+    이 값은 섹션 헤더·표 요약·문맥 단락·평탄화 셀 문장을 빼고 세므로 완성된
+    조각의 실제 토큰 수보다 작다. 실제 예산은 split_eu()가 후보 조각을 그대로
+    만들어 count_eu_tokens()로 직접 센다.
     """
     text = "\n".join(x for x in [caption, html, footnote] if x)
     return count_tokens(text)
@@ -123,6 +123,15 @@ def split_eu(
 ):
     """EU 하나를 토큰 한도에 맞춰 분할.
 
+    행을 어디서 끊을지는 후보 조각을 실제로 조립해 eu.text 전체를 세서
+    정한다 — 캡션·섹션 헤더·표 요약·문맥 단락·평탄화 셀 문장이 모든 조각에
+    복제되므로, 이것들을 빼고 세면 완성된 조각이 한도를 넘는다.
+
+    각주는 마지막 조각에만 실리지만(아래 참고), 어느 조각이 마지막이 될지는
+    끝까지 가봐야 알 수 있다. 그래서 예산은 항상 각주를 포함해 계산하고 각주가
+    빠지는 앞쪽 조각은 그만큼 여유를 두는 쪽을 택했다 — 조각이 한도를 넘지
+    않는 것이 몇 토큰 더 채우는 것보다 중요하다.
+
     Args:
         eu: 분할 대상 EU.
         limit: 조각 하나의 토큰 상한. 기본 DEFAULT_TOKEN_LIMIT(512).
@@ -132,6 +141,9 @@ def split_eu(
         헤더/문맥 단락/table_abstract/bbox를 부모에서 그대로 물려받고,
         table_html과 flattened_rows만 자기 행 범위로 좁혀진다. 조각의
         eu_id는 "{부모 eu_id}-s{n}"(n은 1부터).
+
+        공통 필드에 행 하나만 더해도 한도를 넘으면 행 단위 분할로는 해결되지
+        않으므로 llm_summary로 넘긴다.
     """
     total = count_tokens(eu.text)
 
@@ -175,20 +187,53 @@ def split_eu(
             for sentence in eu.row_sentence_map.get(pos + header_row_offset, [])
         ]
 
-    chunks = []
-    current_rows = []
+    def _chunk_of(
+        rows_subset: list[str],
+        positions: list[int],
+        split_idx: int,
+        footnote_text: str,
+    ) -> EvidenceUnit:
+        """조각 하나를 조립. 예산 측정과 최종 결과가 같은 객체를 쓰도록 한다."""
+        return EvidenceUnit(
+            eu_id=f"{eu.eu_id}-s{split_idx}",
+            page_no=eu.page_no,
+            doc_id=eu.doc_id,
+            table_index=eu.table_index,
+            section_header=eu.section_header,
+            caption_text=eu.caption_text,
+            table_html=build_table(header_html, rows_subset),
+            footnote_text=footnote_text,
+            # 문맥 단락은 모든 조각에 그대로 복제한다 — 일부 조각에만 실으면
+            # 문맥에 답이 있는 질의에서 그 조각이 검색돼도 근거가 빠진다.
+            context_before=list(eu.context_before),
+            context_after=list(eu.context_after),
+            page_span=set(eu.page_span),  # 부모 EU의 page_span 그대로 전파
+            flattened_rows=_flattened_for(positions),
+            table_abstract=eu.table_abstract,
+            bbox=eu.bbox,
+            is_split=True,
+            split_index=split_idx,
+            total_splits=None,
+            caption_confidence=eu.caption_confidence,
+        )
+
+    chunks: list[EvidenceUnit] = []
+    current_rows: list[str] = []
     current_positions: list[int] = []
     split_idx = 1
 
     for pos, row in enumerate(rows):
-        # 행 하나만으로도 한도를 넘으면 행 단위 분할로는 해결되지 않으므로
-        # 여기까지 만든 조각을 버리고 표 전체를 llm_summary로 넘긴다.
-        single_html = build_table(header_html, [row])
-        if estimate_chunk_tokens(
-            eu.caption_text,
-            single_html,
-            eu.footnote_text,
-        ) > limit:
+        candidate = _chunk_of(
+            current_rows + [row], current_positions + [pos], split_idx, eu.footnote_text
+        )
+        if count_eu_tokens(candidate) <= limit:
+            current_rows.append(row)
+            current_positions.append(pos)
+            continue
+
+        # 행 하나만으로도 한도를 넘으면 행 단위 분할로는 해결되지 않는다.
+        solo = _chunk_of([row], [pos], split_idx, eu.footnote_text)
+        if count_eu_tokens(solo) > limit:
             return SplitResult(
                 strategy="llm_summary",
                 chunks=[eu],
@@ -196,70 +241,17 @@ def split_eu(
                 total_tokens=total,
             )
 
-        candidate_rows = current_rows + [row]
-        candidate_html = build_table(header_html, candidate_rows)
-        token = estimate_chunk_tokens(eu.caption_text, candidate_html)
+        # 각주는 표 전체에 걸리는 주석이라 조각마다 반복하지 않고 마지막
+        # 조각에만 싣는다(루프 뒤 "마지막 조각" 참고).
+        chunks.append(_chunk_of(current_rows, current_positions, split_idx, ""))
+        split_idx += 1
+        current_rows = [row]
+        current_positions = [pos]
 
-        if token <= limit:
-            current_rows.append(row)
-            current_positions.append(pos)
-        else:
-            chunk_html = build_table(header_html, current_rows)
-            chunks.append(
-                EvidenceUnit(
-                    eu_id=f"{eu.eu_id}-s{split_idx}",
-                    page_no=eu.page_no,
-                    doc_id=eu.doc_id,
-                    table_index=eu.table_index,
-                    section_header=eu.section_header,
-                    caption_text=eu.caption_text,
-                    table_html=chunk_html,
-                    # 각주는 표 전체에 걸리는 주석이라 조각마다 반복하지 않고
-                    # 마지막 조각에만 싣는다(루프 뒤 "마지막 조각" 참고).
-                    footnote_text="",
-                    # 반면 문맥 단락은 모든 조각에 그대로 복제한다 — 일부
-                    # 조각에만 실으면 문맥에 답이 있는 질의에서 그 조각이
-                    # 검색돼도 근거가 빠진다.
-                    context_before=list(eu.context_before),
-                    context_after=list(eu.context_after),
-                    page_span=set(eu.page_span),  # 부모 EU의 page_span 그대로 전파
-                    flattened_rows=_flattened_for(current_positions),
-                    table_abstract=eu.table_abstract,
-                    bbox=eu.bbox,
-                    is_split=True,
-                    split_index=split_idx,
-                    total_splits=None,
-                    caption_confidence=eu.caption_confidence,
-                )
-            )
-            split_idx += 1
-            current_rows = [row]
-            current_positions = [pos]
-
-    # 마지막 조각
+    # 마지막 조각 — 각주는 여기에만
     if current_rows:
-        chunk_html = build_table(header_html, current_rows)
         chunks.append(
-            EvidenceUnit(
-                eu_id=f"{eu.eu_id}-s{split_idx}",
-                page_no=eu.page_no,
-                doc_id=eu.doc_id,
-                table_index=eu.table_index,
-                section_header=eu.section_header,
-                caption_text=eu.caption_text,
-                table_html=chunk_html,
-                footnote_text=eu.footnote_text,
-                context_before=list(eu.context_before),
-                context_after=list(eu.context_after),
-                page_span=set(eu.page_span),  # 앞쪽 조각과 동일하게 전파(마지막 조각만 빠져있던 버그)
-                flattened_rows=_flattened_for(current_positions),
-                table_abstract=eu.table_abstract,
-                bbox=eu.bbox,
-                is_split=True,
-                split_index=split_idx,
-                total_splits=None,
-                caption_confidence=eu.caption_confidence,
-            )
+            _chunk_of(current_rows, current_positions, split_idx, eu.footnote_text)
         )
 
     total_chunks = len(chunks)
@@ -272,6 +264,7 @@ def split_eu(
         original_eu_id=eu.eu_id,
         total_tokens=total,
     )
+
 
 
 def split_oversized_units(
