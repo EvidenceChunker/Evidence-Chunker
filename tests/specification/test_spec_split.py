@@ -16,15 +16,25 @@ def test_qa33_token_count_matches_tiktoken():
 @pytest.mark.parametrize("size,strategy",[(512,"single"),(513,"row_split")])
 def test_qa33_exact_512_513_boundary(size,strategy):
     # Real tokenizer; no mocked token counter. Padding creates the boundary input.
+    # 입력은 행 분할로 실제 한도를 맞출 수 있는 표여야 한다. 데이터 행이 하나뿐인
+    # 표는 513토큰이어도 쪼갤 수단이 없어 QA-37의 llm_summary로 빠지며, 그 경로는
+    # test_qa37_oversized_or_single_row_returns_original이 따로 검증한다.
+    rows=10
+    body="".join(f"<tr><td>R{r}</td><td>{r}</td></tr>" for r in range(1,rows+1))
+    sentences=[f"R{r} | Value: {r}" for r in range(1,rows+1)]
     e=EvidenceUnit(eu_id="boundary",page_no=1,
-        table_html="<table><thead><tr><th>Value</th></tr></thead><tbody><tr><td>42</td></tr></tbody></table>",
-        row_sentence_map={1:["Value: 42"]},flattened_rows=["Value: 42"])
+        table_html="<table><thead><tr><th>Name</th><th>Value</th></tr></thead><tbody>"+body+"</tbody></table>",
+        row_sentence_map={r:[sentences[r-1]] for r in range(1,rows+1)},
+        flattened_rows=list(sentences))
     for n in range(1,700):
         e.context_before=["x "*n]
         if count_eu_tokens(e)==size:break
     assert count_eu_tokens(e)==size, "Tokenizer boundary fixture could not be constructed"
     result=split_eu(e)
     assert result.strategy==strategy
+    if strategy=="row_split":
+        assert all(count_eu_tokens(c)<=512 for c in result.chunks)
+
 
 @pytest.mark.spec("QA-33")
 def test_qa33_larger_limit_reduces_chunk_count():
