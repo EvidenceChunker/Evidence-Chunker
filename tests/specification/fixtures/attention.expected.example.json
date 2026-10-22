@@ -1,0 +1,20 @@
+{
+  "_instructions": "Copy to attention.expected.json and fill by inspecting the exact PDF; never generate answers from the tested output.",
+  "pdf_sha256": null,
+  "page_count": null,
+  "table_count": null,
+  "tables": [
+    {
+      "index": 0,
+      "page_no": null,
+      "cell_texts": [],
+      "expect_eu": true,
+      "expect_split": false,
+      "section_header": null,
+      "data_rows": [],
+      "required_text": [],
+      "absent_fields": []
+    }
+  ]
+}
+
