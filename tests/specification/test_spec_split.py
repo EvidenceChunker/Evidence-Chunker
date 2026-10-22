@@ -68,9 +68,14 @@ def test_qa35_repeated_fields_and_final_footnote_field():
     assert result.chunks[-1].footnote_text==e.footnote_text
 
 @pytest.mark.spec("QA-35")
-@pytest.mark.spec_gap
-def test_qa35_full_footnote_text_only_in_last_chunk():
-    # Literal submitted wording: full note content must not occur in earlier chunks.
+def test_qa35_footnote_field_is_last_only_but_cell_marker_survives():
+    """
+    QA-35의 '각주'는 표 전체에 걸리는 주석(footnote_text 필드)을 뜻한다.
+    특정 셀에 걸린 각주 마커는 QA-28("각주 마커가 있는 셀 문장에 각주 내용
+    첨부")에 따라 그 셀 문장에 유지된다. 조각이 단독으로 검색됐을 때 "이 값에
+    왜 표시가 붙었는지"를 잃지 않기 위한 설계이며, 두 항목은 각각 '셀 문장
+    변환'과 '분할 반복 요소'라는 서로 다른 단계를 규정한다.
+    """
     e=raw_unit()
     note="UNIQUE_FULL_FOOTNOTE"
     e.footnote_text=note
@@ -78,8 +83,14 @@ def test_qa35_full_footnote_text_only_in_last_chunk():
     e.flattened_rows=[s for r in sorted(e.row_sentence_map) for s in e.row_sentence_map[r]]
     result=split_eu(e)
     assert result.strategy=="row_split" and len(result.chunks)>1
-    assert all(note not in c.text for c in result.chunks[:-1]), "GAP-04: note survives in flattened cell text"
+    # 필드로서의 각주는 마지막 조각에만
+    assert all(not c.footnote_text for c in result.chunks[:-1])
+    assert result.chunks[-1].footnote_text==note
     assert note in result.chunks[-1].text
+    # 마커가 달린 셀 문장의 각주는 그 셀이 속한 조각에 그대로 유지 (QA-28)
+    assert any(note in s for s in result.chunks[0].flattened_rows)
+
+
 
 @pytest.mark.spec("QA-36")
 def test_qa36_split_ids_indices_and_total():
