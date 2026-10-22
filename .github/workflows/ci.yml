@@ -16,7 +16,9 @@ jobs:
           python-version: "3.12"
 
       - name: Install package
-        run: pip install -e ".[dev]"
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
 
       - name: 테스트 실행
         run: pytest -q
@@ -31,7 +33,10 @@ jobs:
           python-version: "3.12"
 
       - name: Build wheel
-        run: pip install build && python -m build
+        run: |
+          python -m pip install --upgrade pip
+          pip install build
+          python -m build
 
       - name: wheel 내용물 확인
         run: python -m zipfile -l dist/*.whl
@@ -52,7 +57,11 @@ jobs:
           python-version: "3.12"
 
       - name: Install package + pip-audit
-        run: pip install -e . pip-audit
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e . pip-audit
 
       - name: pip-audit로 의존성 취약점 스캔
-        run: pip-audit
+        # 제외 사유와 해제 조건은 .pip-audit-ignore 주석 참고.
+        run: |
+          pip-audit $(grep -v '^#' .pip-audit-ignore | grep -v '^$' | sed 's/^/--ignore-vuln /')
