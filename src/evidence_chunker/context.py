@@ -36,6 +36,16 @@ CONTEXT_LABEL_NAMES = {"text", "list_item", "paragraph"}
 COLUMN_OVERLAP_TOL = 20.0   # 멀티컬럼 컬럼 판별 허용 오차 (pt)
 ADJACENT_PAGE_EDGE_RATIO = 0.15  # 페이지 상하단 15% 이내일 때 인접 페이지 탐색
 
+# 문맥 단락이 EU에서 차지할 수 있는 토큰 상한.
+#
+# 문맥은 분할 조각 전부에 복제되는 고정 비용이라, 제한이 없으면 표 본문보다
+# 문맥이 커져서 "행 하나 + 고정 비용"만으로 토큰 한도를 넘는다. 그러면 큰 표가
+# 행 분할 대상에서 빠지고 llm_summary로 통째로 흘러간다.
+#
+# bbox 수집 범위(300pt) 자체는 명세대로 두고, 수집된 단락 중 표에서 가까운
+# 것부터 이 예산까지만 싣는다.
+CONTEXT_TOKEN_BUDGET = 192
+
 
 def _center_y(bbox: "BBox") -> float:
     """bbox의 수직 중심. TOPLEFT라 값이 작을수록 페이지 위쪽이다."""
@@ -257,6 +267,43 @@ def _embedding_filter(
             if score.item() >= sim_threshold]
 
 
+def _apply_token_budget(
+    before_candidates: list[tuple[float, str, int]],
+    after_candidates: list[tuple[float, str, int]],
+    before_kept: list[tuple[str, int]],
+    after_kept: list[tuple[str, int]],
+    budget: int = CONTEXT_TOKEN_BUDGET,
+) -> tuple[list[tuple[str, int]], list[tuple[str, int]]]:
+    """표에서 가까운 단락부터 토큰 예산까지만 남긴다.
+
+    위/아래를 따로 자르지 않고 거리 하나로 줄 세운다 — 설명이 표 아래에만
+    몰린 문서에서 위쪽 몫을 비워두는 낭비를 막기 위해서다. 예산을 넘기는
+    단락이 나오면 거기서 끊는다(그 뒤 단락은 더 멀다).
+    """
+    from .tokens import count_tokens
+
+    keep_before = {text for text, _ in before_kept}
+    keep_after = {text for text, _ in after_kept}
+
+    merged = [("b", d, t, p) for d, t, p in before_candidates if t in keep_before]
+    merged += [("a", d, t, p) for d, t, p in after_candidates if t in keep_after]
+    merged.sort(key=lambda x: x[1])
+
+    used = 0
+    kept_b: list[tuple[float, str, int]] = []
+    kept_a: list[tuple[float, str, int]] = []
+    for side, dist, text, page in merged:
+        cost = count_tokens(text)
+        if used + cost > budget:
+            break
+        used += cost
+        (kept_b if side == "b" else kept_a).append((dist, text, page))
+
+    kept_b.sort(key=lambda x: x[0])
+    kept_a.sort(key=lambda x: x[0])
+    return ([(t, p) for _, t, p in kept_b], [(t, p) for _, t, p in kept_a])
+
+
 def attach_context_paragraphs(
     eu: "EvidenceUnit",
     parsed: "ParsedDoc",
@@ -315,6 +362,10 @@ def attach_context_paragraphs(
     reference = eu.caption_text or ""
     before_kept = _embedding_filter(before_candidates, reference, sim_threshold)
     after_kept  = _embedding_filter(after_candidates,  reference, sim_threshold)
+
+    before_kept, after_kept = _apply_token_budget(
+        before_candidates, after_candidates, before_kept, after_kept
+    )
 
     eu.context_before = [text for text, _ in before_kept]
     eu.context_after  = [text for text, _ in after_kept]
