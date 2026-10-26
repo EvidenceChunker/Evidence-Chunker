@@ -105,11 +105,19 @@ class EvidenceUnit:
 
     @property
     def safe_abstract(self) -> str | None:
-        """table_abstract는 caption_text로 조립되므로, 캡션이 오염됐다면 같이 제거."""
+        """table_abstract에서 캡션 문구를 덜어낸 버전.
+
+        캡션은 text/retrieval_text 맨 앞에 이미 따로 실린다. 요약에 한 번 더
+        남겨두면 긴 논문 캡션(60~70토큰)이 EU마다 두 번 계산되고, 분할 조각
+        전부에 복제되는 고정 비용이라 토큰 한도를 그만큼 차지한다.
+
+        그림 캡션이 섞여 safe_caption이 None인 경우에도 같은 처리로 제거된다.
+        """
         if not self.table_abstract:
             return None
-        if self.caption_text and not self.safe_caption:
-            return self.table_abstract.replace(self.caption_text, "").strip()
+        if self.caption_text:
+            trimmed = self.table_abstract.replace(self.caption_text, "")
+            return " ".join(trimmed.split()) or None
         return self.table_abstract
 
     # safe_caption에서 탈락한 그림 캡션도 키워드로서는 가치가 있어 문맥
