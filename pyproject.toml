@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "evidence-chunker"
-version = "0.1.1"
+version = "0.1.2"
 description = "Docling 기반 Evidence Unit(표+캡션+컨텍스트) 청킹 - RAG 검색 성능 향상"
 readme = "README.md"
 requires-python = ">=3.10"
