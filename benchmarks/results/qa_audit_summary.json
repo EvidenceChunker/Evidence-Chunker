@@ -1,0 +1,38 @@
+{
+  "docling_version": "2.143.1",
+  "docling_core_version": "2.105.0",
+  "evidence_chunker_target_sha_NOT_IMPORTED": "87a43e4f15e50b3ad27e91769ffe9e1864e06791",
+  "n_qa_files_selected": 90,
+  "n_questions_loaded": 2725,
+  "n_questions_audited": 2725,
+  "by_status": {
+    "unmatched_latest_parse": 395,
+    "verified_structural": 2239,
+    "ambiguous_evidence": 20,
+    "ambiguous_multiple_tables": 39,
+    "needs_review_paragraph_changed": 26,
+    "invariant_violation_latest": 6
+  },
+  "by_type": {
+    "cell_value": {
+      "unmatched_latest_parse": 283,
+      "verified_structural": 1429,
+      "ambiguous_multiple_tables": 15
+    },
+    "context_dependent": {
+      "unmatched_latest_parse": 71,
+      "verified_structural": 413,
+      "ambiguous_evidence": 20,
+      "needs_review_paragraph_changed": 26,
+      "invariant_violation_latest": 6
+    },
+    "table_about": {
+      "verified_structural": 397,
+      "unmatched_latest_parse": 41,
+      "ambiguous_multiple_tables": 24
+    }
+  },
+  "n_pdf_parsed": 90,
+  "n_pdf_failed": 0,
+  "note": "Source-only structural check; not human truth annotation; no deletion or auto QA rewriting; do not postselect on EU or baseline performance"
+}

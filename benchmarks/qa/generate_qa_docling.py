@@ -1,16 +1,6 @@
 # Copyright 2026 docling-evidence-chunker contributors
 # SPDX-License-Identifier: Apache-2.0
-"""
-generate_qa_docling.py — 벤치마크용 Q&A 자동 생성기 (자기참조 0, 결정적)
-
-설계 배경 전체는 wiki의 QA-Generation 참고.
-
-사용법:
-    python generate_qa_docling.py --pdf-dir ./data/pdfs --out-dir ./auto_qa
-    python generate_qa_docling.py --pdf-dir ./data/pdfs --out-dir ./auto_qa --limit 3   # 소량 검증
-
-주의: 평가 대상 패키지(evidence_chunker 등)를 sys.path에 넣지 말 것 (격리 위반).
-"""
+'Independent, deterministic benchmark QA generation using Docling.'
 
 from __future__ import annotations
 
@@ -21,12 +11,9 @@ import sys
 from collections import Counter, defaultdict
 from pathlib import Path
 
-# ---------------------------------------------------------------------------
-# 설정
-# ---------------------------------------------------------------------------
 
 GENERATOR_VERSION = "3.4.0-docling-shared"
-DEFAULT_ARTIFACTS_PATH: str | None = None  # None이면 HuggingFace Hub에서 자동 다운로드
+DEFAULT_ARTIFACTS_PATH: str | None = None
 
 MAX_CELL_QA_PER_TABLE = 2
 MAX_CTX_QA_PER_TABLE = 2
@@ -35,24 +22,17 @@ MIN_TOKEN_LEN = 3
 N_CONTEXT_KEYS = 2
 MIN_CTX_PARA_CHARS = 80
 MAX_QUESTION_LEN = 200
-MIN_LINK_TOKENS = 2  # 표-문단 공통 숫자 토큰 최소 개수 (우연 일치 방지)
+MIN_LINK_TOKENS = 2
 
 _TABLE_REF_RE = re.compile(r"(table|tab\.|표)\s*\.?\s*[A-Z]?\.?\s*\d+", re.IGNORECASE)
 CONTEXT_LABELS = {"text", "paragraph", "list_item"}
 
-# 이 프로젝트의 평가 대상 모듈만 금지한다 (Docling은 두 arm 공통 프론트엔드라 허용).
 FORBIDDEN_MODULES = {
     "smart_chunker", "interfaces", "context_attacher", "table_splitter",
     "token_counter", "bbox_utils", "langchain_wrapper",
     "_table_utils", "_caption_mapper", "evidence_chunker",
 }
 
-
-# ===========================================================================
-# 1. 정규화 / 채점
-# ===========================================================================
-# normalize_for_em / has_token / em_hit은 실제 채점 스크립트(benchmarks/measure_recall_*.py)
-# 와 동일한 규칙을 유지해야 한다 — 어긋나면 answer_spec이 의미를 잃는다.
 
 def normalize_for_em(s: str) -> str:
     if not s:
@@ -107,7 +87,7 @@ def is_sane_value(v: str) -> bool:
         return False
     for open_ch, close_ch in (("(", ")"), ("[", "]"), ("{", "}")):
         if n.count(open_ch) != n.count(close_ch):
-            return False  # 괄호 불균형 = 셀이 잘렸다는 신호
+            return False
     return True
 
 
@@ -115,10 +95,8 @@ def clean(v) -> str:
     return " ".join(str(v or "").split())
 
 
-# 질문 라벨용 위생 처리. answer_spec.value 자체는 건드리지 않는다
-# (표 markdown 원문과 일치해야 CI 불변식이 성립).
-_CITATION_RE = re.compile(r"\[\s*\d+(?:\s*,\s*\d+)*\s*\]")          # [9] [1, 2]
-_CITEKEY_RE = re.compile(r"\[[A-Za-z][A-Za-z+.\s]{0,14}\d{2}[a-z]?\]")  # [Ant24] [HBK+21b]
+_CITATION_RE = re.compile(r"\[\s*\d+(?:\s*,\s*\d+)*\s*\]")
+_CITEKEY_RE = re.compile(r"\[[A-Za-z][A-Za-z+.\s]{0,14}\d{2}[a-z]?\]")
 _MARKER_RE = re.compile(r"[†‡§※#]")
 
 
@@ -143,7 +121,6 @@ def display_answer(v: str) -> str:
     return a
 
 
-# 순수 숫자 헤더 = 데이터 행이 헤더로 잘못 승격된 것 (연도는 예외로 보존).
 _PURE_NUM_HEADER_RE = re.compile(r"^[\d.,%\s]+$")
 _YEAR_HEADER_RE = re.compile(r"^(19|20)\d{2}$")
 
@@ -169,10 +146,6 @@ def is_numeric_header(h: str) -> bool:
     return bool(_PURE_NUM_HEADER_RE.match(h))
 
 
-# ===========================================================================
-# 2. Docling 접근 — raw 필드만. 우리 유틸을 재사용하지 않는다.
-# ===========================================================================
-
 def make_converter(artifacts_path: str | None):
     from docling.document_converter import DocumentConverter, PdfFormatOption
     from docling.datamodel.pipeline_options import PdfPipelineOptions
@@ -184,11 +157,7 @@ def make_converter(artifacts_path: str | None):
 
 
 def build_grid(cells: list[dict], num_rows: int, num_cols: int) -> tuple[list[list[str]], int]:
-    """table_cells → (그리드, 헤더행수). grid[0]은 조립된 헤더 행, grid[1:]는 데이터.
-
-    span 전파 → 헤더 행수 판정 → 캡션 행 제외 → 세로 조인 순으로 처리한다.
-    evidence_chunker.flatten.build_col_header_map()과는 별개 구현(값은 유사)이다.
-    """
+    'table_cells → (그리드, 헤더행수). grid[0]은 조립된 헤더 행, grid[1:]는 데이터.'
     if num_rows <= 0 or num_cols <= 0:
         return [], 0
 
@@ -214,11 +183,9 @@ def build_grid(cells: list[dict], num_rows: int, num_cols: int) -> tuple[list[li
                 cell.get("end_row_offset_idx", cell.get("start_row_offset_idx", 0) + 1),
             )
     if header_rows <= 0:
-        header_rows = 1  # column_header 플래그 없음 → 첫 행을 헤더로 폴백
+        header_rows = 1
     header_rows = min(header_rows, max(1, num_rows - 1))
 
-    # 전 열이 동일한 텍스트인 행 = 캡션이 표 첫 행으로 통째로 span된 경우.
-    # 캡션을 열 헤더로 조립하면 캡션 매핑(평가 대상 모듈)이 뒷문으로 질문에 샌다.
     caption_rows: set[int] = set()
     if num_cols >= 2:
         for rr in range(header_rows):
@@ -226,7 +193,7 @@ def build_grid(cells: list[dict], num_rows: int, num_cols: int) -> tuple[list[li
             if vals[0] and all(v == vals[0] for v in vals):
                 caption_rows.add(rr)
     if caption_rows and len(caption_rows) == header_rows and header_rows < num_rows - 1:
-        header_rows += 1  # 헤더 행이 전부 캡션이면 다음 행을 실제 헤더로 승격
+        header_rows += 1
 
     header: list[str] = []
     for cc in range(num_cols):
@@ -290,10 +257,6 @@ def vertical_gap_pt(table_bbox: dict, para_bbox: dict) -> float | None:
     return 0.0
 
 
-# ===========================================================================
-# 3. context_keys 선정 — 문서 내 희소 토큰 우선 (결정적, RNG 없음)
-# ===========================================================================
-
 def pick_context_keys(sources: list[str], doc_counts: Counter,
                        exclude: set[str], n: int = N_CONTEXT_KEYS) -> list[str]:
     cands: list[str] = []
@@ -310,18 +273,14 @@ def pick_context_keys(sources: list[str], doc_counts: Counter,
     return cands[:n]
 
 
-# ===========================================================================
-# 4. 문항 생성
-# ===========================================================================
-
 def _qa(qid, qtype, question, answer, value, context_keys, table_ref, tbl, delabeled=None):
     return {
         "doc_id": tbl["doc_id"],
-        "qid": f'{tbl["doc_id"]}::{qid}',  # 문서 식별자 접두사 없으면 여러 문서에서 qid 충돌
+        "qid": f'{tbl["doc_id"]}::{qid}',
         "type": qtype,
         "question": question,
         "question_delabeled": delabeled if delabeled is not None else question,
-        "answer": answer,  # 표시용, 채점에 쓰지 않음
+        "answer": answer,
         "answer_spec": {"value": value, "context_keys": list(context_keys)},
         "table_ref": table_ref,
         "page": tbl["page"],
@@ -374,7 +333,7 @@ def gen_cell_value(tbl, doc_counts, table_ref, qid_prefix, skips) -> list[dict]:
                           for t in useful_tokens(row_label) + useful_tokens(col_header)] or [10 ** 6])
             cands.append((rarity, row_label, col_header, value))
 
-    cands.sort(key=lambda x: (x[0], x[1], x[2], x[3]))  # RNG 없이 완전 결정적
+    cands.sort(key=lambda x: (x[0], x[1], x[2], x[3]))
 
     for _, row_label, col_header, value in cands:
         if len(out) >= MAX_CELL_QA_PER_TABLE:
@@ -394,7 +353,7 @@ def gen_cell_value(tbl, doc_counts, table_ref, qid_prefix, skips) -> list[dict]:
             skips["cell:question_too_long"] += 1
             continue
         if has_token(value, normalize_for_em(body)):
-            skips["cell:answer_leak_in_question"] += 1  # 라벨 자체에 정답값 포함
+            skips["cell:answer_leak_in_question"] += 1
             continue
         out.append(_qa(f"{qid_prefix}_c{len(out)}", "cell_value",
                         f"In {table_ref}, {body}", display_answer(value), value,
@@ -404,15 +363,13 @@ def gen_cell_value(tbl, doc_counts, table_ref, qid_prefix, skips) -> list[dict]:
 
 
 def gen_table_about(tbl, doc_counts, table_ref, qid_prefix, skips) -> list[dict]:
-    # 같은 페이지에 표가 2개 이상이면 "what columns does it have?"가 어느 표인지
-    # table_ref만으로 특정 불가능 → 생성하지 않음.
     if tbl.get("n_tables_on_page", 1) >= 2:
         skips["about:ambiguous_page"] += 1
         return []
     headers = [h for h in tbl["grid"][0] if h and len(h) <= MAX_LABEL_LEN]
     cols = []
     for h in headers:
-        if not cols or cols[-1] != h:  # 병합 헤더의 인접 중복만 제거
+        if not cols or cols[-1] != h:
             cols.append(h)
     if len(cols) < 3:
         skips["about:too_few_columns"] += 1
@@ -426,7 +383,6 @@ def gen_table_about(tbl, doc_counts, table_ref, qid_prefix, skips) -> list[dict]
         skips["about:not_enough_keys"] += 1
         return []
 
-    # keys는 채점(answer_spec.context_keys)에만 쓰이고 질문 문장에는 노출되지 않는다.
     body = "what columns does it have?"
     return [_qa(f"{qid_prefix}_cols", "table_about", f"In {table_ref}, {body}",
                 ", ".join(clean_label(c) for c in cols), value_col, keys, table_ref, tbl,
@@ -434,10 +390,7 @@ def gen_table_about(tbl, doc_counts, table_ref, qid_prefix, skips) -> list[dict]
 
 
 def gen_context_dependent(tbl, paragraphs, doc_counts, table_ref, qid_prefix, skips) -> list[dict]:
-    """
-    v1 = 표 ∩ 문단 (연결 증거, 문항엔 안 씀)  v2 = 표 - 문단 (정답)  k = 문단 - 표 (context_keys)
-    표만 있으면 k 없어 실패, 문단만 있으면 v2 없어 실패, 표+문단(EU)만 둘 다 있어 통과.
-    """
+    'Generate questions requiring both a table value and paragraph context.'
     grid = tbl["grid"]
     headers = grid[0]
     vcounts = value_counts_in_table(grid)
@@ -446,9 +399,7 @@ def gen_context_dependent(tbl, paragraphs, doc_counts, table_ref, qid_prefix, sk
         table_tokens.update(tokens_of(" ".join(row)))
 
     out = []
-    used_values: set[str] = set()  # 같은 셀 재사용 시 문항 간 상관 발생 방지
-    # 거리 게이트 없음 — 탐색 범위는 페이지 전체(모듈의 300pt를 진부분집합으로 포함).
-    # 거리는 meta.dist_pt로 측정만 한다.
+    used_values: set[str] = set()
     for para_item in paragraphs:
         if len(out) >= MAX_CTX_QA_PER_TABLE:
             break
@@ -483,7 +434,7 @@ def gen_context_dependent(tbl, paragraphs, doc_counts, table_ref, qid_prefix, sk
                 if not is_sane_value(value):
                     continue
                 if has_token(value, para_norm):
-                    continue  # 문단에도 있으면 v2 자격 없음
+                    continue
                 if normalize_for_em(value) in used_values:
                     continue
                 if vcounts[normalize_for_em(value)] > 1:
@@ -508,17 +459,10 @@ def gen_context_dependent(tbl, paragraphs, doc_counts, table_ref, qid_prefix, sk
         qa["meta"]["ctx_explicit_ref"] = explicit_ref
         qa["meta"]["ctx_para_excerpt"] = para[:200]
         qa["meta"]["dist_pt"] = vertical_gap_pt(tbl.get("bbox") or {}, para_item.get("bbox") or {})
-        qa["_para"] = para  # 검증용, 출력 직전 제거
+        qa["_para"] = para
         out.append(qa)
     return out
 
-
-# ===========================================================================
-# 5. CI 불변식 — 내보내기 전 자체 검증
-# ===========================================================================
-#   유형                       표 markdown 단독   문단 단독   표+문단
-#   cell_value / table_about   PASS               -           PASS
-#   context_dependent          FAIL               FAIL        PASS
 
 def validate(qa: dict, table_md: str) -> tuple[bool, str]:
     spec = qa["answer_spec"]
@@ -535,15 +479,10 @@ def validate(qa: dict, table_md: str) -> tuple[bool, str]:
     return True, "ok"
 
 
-# ===========================================================================
-# 6. PDF 1개 처리
-# ===========================================================================
-
 def generate_for_doc(doc, doc_id: str) -> tuple[list[dict], Counter, Counter]:
     skips: Counter = Counter()
     rejects: Counter = Counter()
 
-    # 문서 전체 토큰 빈도를 생성 전에 완성 (표별로 갱신하면 앞쪽 표일수록 희소도 왜곡).
     doc_counts: Counter = Counter()
     for item in getattr(doc, "texts", []) or []:
         try:
@@ -580,8 +519,8 @@ def generate_for_doc(doc, doc_id: str) -> tuple[list[dict], Counter, Counter]:
 
     all_qa: list[dict] = []
     per_page_seq: Counter = Counter()
-    seen_doc_specs: set = set()   # Docling이 같은 표를 여러 TableItem으로 인식하는 경우 대비
-    seen_questions: set = set()   # 문서 내 동일 질문(같은 top-1) 억제
+    seen_doc_specs: set = set()
+    seen_questions: set = set()
 
     for table_index, (table, d, pg, tbbox) in enumerate(tables_meta):
         if pg == -1:
@@ -605,7 +544,7 @@ def generate_for_doc(doc, doc_id: str) -> tuple[list[dict], Counter, Counter]:
             "page_index": round(pg / n_pages, 3),
         }
         qid_prefix = f"auto_p{pg}_t{idx}"
-        table_ref = f"the table on page {pg}"  # 캡션은 읽지 않음 — 캡션 매핑이 평가 대상 모듈
+        table_ref = f"the table on page {pg}"
 
         md = table_markdown(doc, table)
         if not md:
@@ -640,10 +579,6 @@ def generate_for_doc(doc, doc_id: str) -> tuple[list[dict], Counter, Counter]:
     return all_qa, skips, rejects
 
 
-# ===========================================================================
-# 7. 격리 검증
-# ===========================================================================
-
 def assert_isolation() -> None:
     leaked = {m for m in sys.modules if m.split(".")[0] in FORBIDDEN_MODULES}
     if leaked:
@@ -653,10 +588,6 @@ def assert_isolation() -> None:
         )
     print("[isolation] OK — 평가 대상 모듈이 로드되지 않았습니다.")
 
-
-# ===========================================================================
-# 8. main
-# ===========================================================================
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__.strip().splitlines()[0])
