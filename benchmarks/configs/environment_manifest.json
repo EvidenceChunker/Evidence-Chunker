@@ -1,0 +1,16 @@
+{
+  "docling": "2.143.1",
+  "docling_core": "2.105.0",
+  "evidence_chunker": "0.1.2",
+  "evidence_chunker_git_sha": "87a43e4f15e50b3ad27e91769ffe9e1864e06791",
+  "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
+  "embedding_model_git_sha": "1110a243fdf4706b3f48f1d95db1a4f5529b4d41",
+  "sentence_transformers": "5.7.0",
+  "pipeline": "PdfPipelineOptions(), SHA-matched to Step2 parser_config.json",
+  "verified_qas": 2239,
+  "remapped_table_indices": 602,
+  "benchmark_script_sha256": "739f590670ab7a05d359d6a9f451df10a3561999aa6029d60efa4cc23a8aa274",
+  "audit_bundle_sha256": "b6957066f972b7dc01b6e547754de122b755ced61e2d22781afc7ebc65eb983a",
+  "prompt_token_measure": "cl100k_base, full display text only, Top1/3/5, budgets 512-8192, prompt-vs-single chunk evidence, rank-prefix stop; no generated LLM",
+  "note": "This is a REPLAY on the same dataset used to choose prefix ablation; exploratory/not independent holdout. Shared parser and same QA/model."
+}
